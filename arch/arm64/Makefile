@@ -152,7 +152,7 @@ ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 export DTC_FLAGS := -@
 endif
 
-all:	$(KBUILD_DTBS) $(KBUILD_TARGET)
+all:	$(KBUILD_DTBS) $(KBUILD_TARGET) dtb
 
 Image: vmlinux
 	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
@@ -167,6 +167,9 @@ Image-dtb: vmlinux scripts dtbs
 	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
 Image.gz-dtb: vmlinux scripts dtbs Image.gz
+	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
+
+dtb: dtbs
 	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
