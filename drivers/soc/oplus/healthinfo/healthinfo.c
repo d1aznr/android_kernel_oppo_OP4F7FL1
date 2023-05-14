@@ -23,9 +23,6 @@
 #ifdef CONFIG_PROCESS_RECLAIM_ENHANCE
 #include <linux/process_mm_reclaim.h>
 #endif
-#ifdef CONFIG_KSWAPD_DEBUG_STATISTICS
-#include <soc/oplus/lowmem_dbg.h>
-#endif
 #include <linux/version.h>
 #include <linux/time64.h>
 #include <linux/timekeeping.h>
@@ -1226,12 +1223,6 @@ static int __init healthinfo_init(void)
         ohm_err("create fsync_thresh proc failed.\n");
         goto ERROR_INIT_VERSION;
     }
-
-#ifdef CONFIG_KSWAPD_DEBUG_STATISTICS
-	ret = kswapd_debug_init(healthinfo);
-	if (ret)
-		goto ERROR_INIT_VERSION;
-#endif
 
 #if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) && IS_BUILTIN(CONFIG_OPLUS_FEATURE_ZRAM_OPT)) \
 	|| ((LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)) && defined(CONFIG_HYBRIDSWAP_SWAPD))
