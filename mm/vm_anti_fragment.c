@@ -177,10 +177,6 @@ ignore_reserve_subtree:
 				rest, subtree, rest_reserve, subtree_reserve, rvma);
 	svm_oom_msg[len] = '\0';
 
-#ifdef CONFIG_OPPO_HEALTHINFO
-	ohm_action_trig_with_msg(OHM_MEM_VMA_ALLOC_ERR, svm_oom_msg);
-#endif
-
 	prev_pid = current->pid;
 	rest_size = rest + rest_reserve;
 	prev_jiffies = jiffies;
