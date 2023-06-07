@@ -41,10 +41,6 @@
 #define NETLINK_OPPO_HANS       29      /* Socket for freezing solution*/
 #endif /*OPLUS_FEATURE_HANS_FREEZE*/
 
-//Add for apps network monitors
-#define NETLINK_OPLUS_APPS_MONITOR  35      /* Apps monitor NETLINK SOCK */
-//#endif /* VENDOR_EDIT */
-
 //#ifdef OPLUS_FEATURE_NWPOWER
 #define NETLINK_OPLUS_NWPOWERSTATE	36	/*OPLUS NW PowerState*/
 //#endif /* OPLUS_FEATURE_NWPOWER */
