@@ -7947,13 +7947,6 @@ static void typec_src_removal(struct smb_charger *chg)
 
 static void typec_mode_unattached(struct smb_charger *chg)
 {
-	int rc, input_present;
-
-	rc = smblib_is_input_present(chg, &input_present);
-	if(input_present & INPUT_PRESENT_USB) {
-		pr_err("vbus presence, not set icl\n");
-		return;
-	}
 	vote(chg->usb_icl_votable, SW_ICL_MAX_VOTER, true, USBIN_100MA);
 }
 
@@ -17105,7 +17098,6 @@ static bool oplus_check_pdphy_ready(void){
 }
 
 #define OPLUS_SVID 0x22D9
-#define PD_SVOOC_SVID_MS 300
 static void register_oplus_pdsvooc_svid(struct work_struct *work) {
 	int rc = 0;
 	struct oplus_chg_chip *chip = g_oplus_chip;
@@ -17135,7 +17127,7 @@ static void register_oplus_pdsvooc_svid(struct work_struct *work) {
 		rc = PTR_ERR(pd);
 		chg->oplus_pd = NULL;
 		//chg->oplus_svid_handler = NULL;
-		schedule_delayed_work(&chg->regist_pd, msecs_to_jiffies(PD_SVOOC_SVID_MS));
+		schedule_delayed_work(&chg->regist_pd, msecs_to_jiffies(1000));
 	} else {
 		//msleep(1500);
 		chg_err("YGYG2 oplus pps usbpd phandle failed (%ld)\n", PTR_ERR(pd));

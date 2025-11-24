@@ -21,14 +21,8 @@
 #define PPS_VOL_MAX_V1               		10000
 #define PPS_VOL_MAX_V2               		20000
 #define PPS_VOL_CURVE_LMAX                	5500
-
-#define PPS_CURRENT_MAX               		8000
-#define PPS_CURRENT_3A               		3000
-#define PPS_CURRENT_2A               		2000
 #define PPS_VBAT_DIFF_TIME					round_jiffies_relative(msecs_to_jiffies(600*1000))
 #define BCC_CURRENT_MIN               		(1000/100)
-#define PPS_CP_TDIE_OVER_COUNTS				5
-#define PPS_CP_TDIE_MAX						110
 #define BATT_PPS_SYS_MAX               		40
 #define FULL_PPS_SYS_MAX            		6
 #define PPS_R_AVG_NUM						10
@@ -40,10 +34,6 @@
 #define UPDATE_TEMP_TIME                    1
 #define UPDATE_IBAT_TIME                    1
 #define UPDATE_BCC_TIME                 	2
-#define UPDATE_FULL_TIME_NS                 500*1000*1000
-#define UPDATE_CURVE_TIME_NS                500*1000*1000
-#define UPDATE_FULL_TIME_S                  1
-#define UPDATE_CURVE_TIME_S                 1
 
 /*pps power*/
 #define OPLUS_EXTEND_IMIN					6250
@@ -57,8 +47,6 @@
 
 
 /*pps protection*/
-#define PPS_MASTER_CP_I2C_ERROR_COUNTS					14
-#define PPS_SLAVE_CP_I2C_ERROR_COUNTS					8
 #define PPS_CP_IBUS_OVER_COUNTS					3
 #define PPS_CP_IBUS_MAX							4500
 #define PPS_CP_IBUS_DIFF						1000
@@ -274,10 +262,9 @@ typedef enum {
 	PPS_STOP_VOTER_PDO_ERROR = (1 << 8),
 	PPS_STOP_VOTER_TYPE_ERROR = (1 << 9),
 	PPS_STOP_VOTER_MMI_TEST = (1 << 10),
-	PPS_STOP_VOTER_USB_TEMP = (1 << 11),
-	PPS_STOP_VOTER_TDIE_OVER = (1 << 12),
-	PPS_STOP_VOTER_BATCELL_VOL_DIFF = (1 << 13),
-	PPS_STOP_VOTER_CP_ERROR = (1 << 14),
+	PPS_STOP_VOTER_BATCELL_VOL_DIFF = (1 << 11),
+	PPS_STOP_VOTER_USB_TEMP = (1 << 12),
+	PPS_STOP_VOTER_TDIE_OVER = (1 << 13),
 	PPS_STOP_VOTER_OTHER_ABORMAL = (1 << 15),
 } PPS_STOP_VOTER;
 
@@ -344,15 +331,11 @@ struct oplus_pps_timer {
 	struct timespec fastchg_timer;
 	struct timespec temp_timer;
 	struct timespec ibat_timer;
-	struct timespec full_check_timer;
-	struct timespec curve_check_timer;
 	int batt_curve_time;
 	int pps_timeout_time;
 	bool set_pdo_flag;
 	bool set_temp_flag;
 	bool check_ibat_flag;
-	bool full_check_flag;
-	bool curve_check_flag;
 	int work_delay;
 };
 
@@ -499,7 +482,6 @@ struct oplus_pps_chip {
 	int	current_bcc;
 	int	cp_tdie_down;
 /*curve data*/
-	bool need_change_curve;
 	int batt_curve_index;
 
 /*pps status*/
@@ -513,15 +495,13 @@ struct oplus_pps_chip {
 	int pps_stop_status;
 	int pps_support_type;
 	int pps_support_third;
+	int pps_ffc_volt_thd;
 	int pps_dummy_started;
 	int pps_fastchg_started;
 
 /*other*/
 	int cp_slave_enable;
 	int cp_pmid2vout_enable;
-	int cp_master_error_count;
-	int cp_slave_error_count;
-
 	int cp_master_abnormal;
 	int cp_slave_abnormal;
 	int vbat0;
@@ -601,6 +581,7 @@ extern int oplus_chg_pps_get_max_cur(int vbus_mv);
 extern int oplus_chg_pps_cp_mode_init(int mode);
 extern int oplus_pps_get_ffc_vth(void);
 extern int oplus_pps_get_ffc_started(void);
+extern int oplus_pps_get_ffc_volt_thd(void);
 extern int oplus_pps_set_ffc_started(bool status);
 extern int oplus_pps_get_pps_mos_started(void);
 extern void oplus_pps_set_pps_mos_enable(bool enable);
@@ -628,8 +609,5 @@ int oplus_pps_get_bcc_max_curr(void);
 int oplus_pps_get_bcc_min_curr(void);
 int oplus_pps_get_bcc_exit_curr(void);
 bool oplus_pps_bcc_get_temp_range(void);
-void oplus_pps_notify_master_cp_error(void);
-void oplus_pps_notify_slave_cp_error(void);
-void oplus_pps_clear_cp_error(void);
 #endif /*_OPLUS_PPS_H_*/
 

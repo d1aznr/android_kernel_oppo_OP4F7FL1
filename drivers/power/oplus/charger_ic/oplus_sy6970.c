@@ -1509,7 +1509,6 @@ static irqreturn_t sy6970_irq_handler(int irq, void *data)
 		oplus_chg_wakelock(bq, true);
 	}
 	oplus_sy6970_set_mivr_by_battery_vol();
-	oplus_chg_track_check_wired_charging_break(bq->power_good);
 
 	if (oplus_vooc_get_fastchg_started() == true && oplus_vooc_get_adapter_update_status() != 1) {
 		chg_err("oplus_vooc_get_fastchg_started = true!(%d %d)\n", prev_pg, bq->power_good);
@@ -1524,7 +1523,6 @@ static irqreturn_t sy6970_irq_handler(int irq, void *data)
 			goto POWER_CHANGE;
 
 		chg_info("adapter/usb inserted.");
-		oplus_chg_track_check_wired_charging_break(1);
 
 		oplus_chg_wakelock(bq, true);
 
@@ -1567,7 +1565,6 @@ static irqreturn_t sy6970_irq_handler(int irq, void *data)
 		bq->chg_cur = 0;
 		bq->aicr = DEFAULT_IBUS_MA;
 		bq->qc_to_9v_count = 0;
-		oplus_chg_track_check_wired_charging_break(0);
 
 		oplus_wake_up_usbtemp_thread();
 		ret = sy6970_get_hiz_mode(bq,&hz_mode);
@@ -3148,7 +3145,7 @@ void vol_convert_work(struct work_struct *work)
 				icharging = CONVERT_MIN_ICHG_MA;
 			}
 
-			/*Fix 11V3A oplus charger can't change to 9V after back to normal temperature.*/
+			/*Fix 11V3A oppo charger can't change to 9V after back to normal temperature.*/
 			chg_info("wait charger respond");
 			oplus_sy6970_set_ichg(ADAPTER_33W_SUSPEND_ICHG);
 			msleep(ADAPTER_33W_DELAY_MS);

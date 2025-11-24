@@ -429,7 +429,7 @@ void sgm7220_set_typec_sinkonly(void)
 	if (sgm7220_update_reg(gchip->i2c, REG_CTL, value, CTR_DISABLE_RD_RP)) {
 		pr_err("%s: REG_CTL CTR_DISABLE_RD_RP_DEFAULT failed\n", __func__);
 		msleep(300);
-		if (sgm7220_update_reg(gchip->i2c, REG_CTL, value, CTR_DISABLE_RD_RP)) {
+		if(sgm7220_update_reg(gchip->i2c, REG_CTL, value, CTR_DISABLE_RD_RP)) {
 			pr_err("%s: REG_CTL CTR_DISABLE_RD_RP_DEFAULT2 failed\n", __func__);
 			return;
 		}
@@ -438,6 +438,12 @@ void sgm7220_set_typec_sinkonly(void)
 	value = SET_MODE_SELECT_SNK << SET_MODE_SELECT_SHIFT;
 	if (sgm7220_update_reg(gchip->i2c, REG_SET, value, SET_MODE_SELECT)) {
 		pr_err("%s: REG_SET SET_MODE_SELECT_SNK failed\n", __func__);
+		return;
+	}
+
+	value = DISABLE_UFP_ACCESSORY_ENABLE << INT_DISABLE_UFP_ACCESSORY_SHIFT;
+	if (sgm7220_update_reg(gchip->i2c, REG_INT, value, INT_DISABLE_UFP_ACCESSORY)) {
+		pr_err("%s: REG_INT DISABLE_UFP_ACCESSORY_ENABLE failed\n", __func__);
 		return;
 	}
 }

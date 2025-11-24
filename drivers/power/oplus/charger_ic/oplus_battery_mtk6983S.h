@@ -478,7 +478,6 @@ struct mtk_charger {
 
 	bool chrdet_state;
 	bool wd0_detect;
-	bool wait_hard_reset_complete;
 	struct delayed_work status_keep_clean_work;
 	struct wakeup_source *status_wake_lock;
 	bool status_wake_lock_on;

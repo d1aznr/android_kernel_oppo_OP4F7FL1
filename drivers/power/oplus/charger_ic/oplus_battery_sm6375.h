@@ -412,7 +412,6 @@ struct smb_iio {
 	struct iio_channel	*parallel_isense_chan;
 	struct iio_channel	*batbtb_temp_chan;
 	struct iio_channel	*usbbtb_temp_chan;
-	struct iio_channel	*subboard_temp_chan;
 	int			pre_batt_temp;
 #endif
 };

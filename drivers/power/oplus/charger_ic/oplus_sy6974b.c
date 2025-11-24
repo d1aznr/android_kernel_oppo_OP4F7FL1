@@ -2165,7 +2165,6 @@ static irqreturn_t sy6974b_irq_handler(int irq, void *data)
 
 	sy6974b_dump_registers();
 	oplus_chg_check_break(bus_gd);
-	oplus_chg_track_check_wired_charging_break(curr_pg);
 	if (oplus_vooc_get_fastchg_started() == true
 			&& oplus_vooc_get_adapter_update_status() != 1) {
 		chg_err("oplus_vooc_get_fastchg_started = true!(%d %d)\n", prev_pg, curr_pg);

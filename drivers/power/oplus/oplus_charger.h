@@ -450,11 +450,6 @@ typedef enum {
 OPLUS_CHG_TBATT_STATUS;
 
 typedef enum {
-	BATTERY_STATUS__COLD_PHASE1,	/* -20 ~ -10C */
-	BATTERY_STATUS__COLD_PHASE2,	/* -10 ~ 0C */
-} OPLUS_CHG_TBATT_COLD_STATUS;
-
-typedef enum {
         BATTERY_STATUS__NORMAL_PHASE1,	/*16~22C*/
         BATTERY_STATUS__NORMAL_PHASE2,	/*22~34C*/
         BATTERY_STATUS__NORMAL_PHASE3,	/*34~37C*/
@@ -573,7 +568,6 @@ struct tbatt_normal_anti_shake {
 
 struct tbatt_anti_shake {
 	int cold_bound;
-	int freeze_bound;
 	int little_cold_bound;
 	int cool_bound;
 	int little_cool_bound;
@@ -617,7 +611,7 @@ struct oplus_chg_limits {
 	int recharge_mv;
 	int usb_high_than_bat_decidegc;				/*10C*/
 	int removed_bat_decidegc;						/*-19C*/
-	int cold_bat_decidegc;							/*-20C*/
+	int cold_bat_decidegc;							/*-3C*/
 	int temp_cold_vfloat_mv;
 	int temp_cold_fastchg_current_ma;
 	int temp_cold_fastchg_current_ma_high;
@@ -992,9 +986,6 @@ struct oplus_chg_chip {
 	int qc_abnormal_check_count;
 	int tbatt_temp;
 	int shell_temp;
-	int subboard_temp;
-	int tbatt_power_off_cali_temp;
-	bool tbatt_use_subboard_temp;
 	bool tbatt_shell_status;
 	bool support_tbatt_shell;
 	int offset_temp;
@@ -1032,7 +1023,6 @@ struct oplus_chg_chip {
 	int batt_capacity_mah;
 	int tbatt_pre_shake;
 	int tbatt_normal_pre_shake;
-	int tbatt_cold_pre_shake;
 	bool batt_exist;
 	bool batt_full;
 	bool real_batt_full;
@@ -1050,7 +1040,6 @@ struct oplus_chg_chip {
 	int vchg_status;
 	int tbatt_status;
 	int tbatt_normal_status;
-	int tbatt_cold_status;
 	int prop_status;
 	int stop_voter;
 	int notify_code;
@@ -1157,7 +1146,6 @@ struct oplus_chg_chip {
 	int len_array;
 	wait_queue_head_t oplus_usbtemp_wq;
 	wait_queue_head_t oplus_usbtemp_wq_new_method;
-	wait_queue_head_t oplus_bcc_wq;
 	int usbtemp_batttemp_gap;
 	int usbtemp_batttemp_recover_gap;
 	int usbtemp_batttemp_current_gap;
@@ -1323,7 +1311,6 @@ struct oplus_chg_chip {
 	int fg_check_ibat_cnt;
 	int parallel_error_flag;
 	bool soc_not_full_report;
-	bool support_subboard_ntc;
 };
 
 
@@ -1480,7 +1467,6 @@ int __attribute__((weak)) get_boot_mode(void)
 }
 #endif
 
-int oplus_get_report_batt_temp(void);
 /*********************************************
  * power_supply usb/ac/battery functions
  **********************************************/

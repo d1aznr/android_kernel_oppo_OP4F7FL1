@@ -5154,7 +5154,7 @@ int oplus_mt6375_get_tchg(int *tchg_min,	int *tchg_max)
 bool oplus_tchg_01c_precision(void)
 {
 	if (!pinfo) {
-		printk(KERN_ERR "[OPLUS_CHG][%s]: charger_data not ready!\n", __func__);
+		printk(KERN_ERR "[OPPO_CHG][%s]: charger_data not ready!\n", __func__);
 		return false;
 	}
 	return pinfo->support_ntc_01c_precision;

@@ -677,7 +677,7 @@ int zy0603_reset_rc_sfr(void)
 }
 EXPORT_SYMBOL(zy0603_reset_rc_sfr);
 
-/* OPLUS 2021-06-20 Add begin for zy0603 bad battery. */
+/* OPPO 2021-06-20 Add begin for zy0603 bad battery. */
 static int zy0603_start_checksum_cal(struct chip_bq27541 *chip)
 {
 	u8 update_checksum[2] = {0x05, 0x00};
@@ -1204,8 +1204,8 @@ static int zy0603_afi_param_update(struct chip_bq27541 *chip)
 	return 0;
 }
 
-#define OPLUS_AFI_UPDATE_INTERVAL_SEC 		5
-#define OPLUS_AFI_UPDATE_INTERVAL	round_jiffies_relative(msecs_to_jiffies(OPLUS_AFI_UPDATE_INTERVAL_SEC*1000))
+#define OPPO_AFI_UPDATE_INTERVAL_SEC 		5
+#define OPPO_AFI_UPDATE_INTERVAL	round_jiffies_relative(msecs_to_jiffies(OPPO_AFI_UPDATE_INTERVAL_SEC*1000))
 extern bool oplus_check_afi_update_condition(void);
 static void zy0603_afi_update_work(struct work_struct *work)
 {

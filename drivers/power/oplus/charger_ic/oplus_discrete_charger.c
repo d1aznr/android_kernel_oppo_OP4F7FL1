@@ -275,10 +275,6 @@ static int oplus_parse_dt_adc_channels(struct smb_charger *chg)
 	if (rc < 0)
 		return rc;
 
-	rc = oplus_get_iio_channel(chg, "subboard_temp_chan", &chg->iio.subboard_temp_chan);
-	if (rc < 0)
-		return rc;
-
 	return 0;
 }
 
@@ -303,15 +299,15 @@ int oplus_get_subboard_temp(void)
 	}
 
 	chg = &chip->pmic_spmi.smb5_chip->chg;
-	if (IS_ERR_OR_NULL(chg->iio.subboard_temp_chan)) {
-		chg_err("subboard_temp_chan is NULL\n");
+	if (IS_ERR_OR_NULL(chg->iio.usbbtb_temp_chan)) {
+		chg_err("batt_therm_t_chan is NULL\n");
 		temp = DEFAULT_SUBBOARD_TEMP;
 		goto done;
 	}
 
-	rc = iio_read_channel_processed(chg->iio.subboard_temp_chan, &temp);
+	rc = iio_read_channel_processed(chg->iio.usbbtb_temp_chan, &temp);
 	if (rc < 0) {
-		chg_err("Error in reading subboard_temp_chan IIO channel data, rc=%d\n", rc);
+		chg_err("Error in reading batt_therm IIO channel data, rc=%d\n", rc);
 		temp = chg->iio.pre_batt_temp;
 		goto done;
 	}
@@ -454,8 +450,6 @@ extern bool ext_boot_with_console(void);
 #endif
 
 extern int oplus_usbtemp_monitor_common(void *data);
-extern int oplus_usbtemp_monitor_common_new_method(void *data);
-
 extern void oplus_usbtemp_recover_func(struct oplus_chg_chip *chip);
 
 bool oplus_ccdetect_check_is_gpio(struct oplus_chg_chip *chip);
@@ -1442,7 +1436,6 @@ static int oplus_chg_parse_custom_dt(struct oplus_chg_chip *chip)
 		chg->sy6974b_shipmode_enable = of_property_read_bool(node, "qcom,use_sy6974b_shipmode");
 		chg->external_cclogic = of_property_read_bool(node, "qcom,use_external_cclogic");
 		chg->pd_not_rise_vbus_only_5v = of_property_read_bool(node, "qcom,pd_not_rise_vbus_only_5v");
-		g_oplus_chip->tbatt_use_subboard_temp = of_property_read_bool(node, "oplus,tbatt_use_subboard_temp");
 	}
 #endif
 	return rc;

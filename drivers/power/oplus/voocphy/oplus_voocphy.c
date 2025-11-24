@@ -3647,7 +3647,7 @@ void oplus_voocphy_handle_voocphy_status(struct work_struct *work)
 		voocphy_info("fastchg start: [%d], adapter version: [0x%0x]\n",
 		             chip->fastchg_start, chip->fast_chg_type);
 		oplus_chg_track_set_fastchg_break_code(
-			TRACK_CP_VOOCPHY_BREAK_DEFAULT);
+			TRACK_ADSP_VOOCPHY_BREAK_DEFAULT);
 	} else if (intval == FAST_NOTIFY_DUMMY_START) {
 		chip->fastchg_start = false;
 		chip->fastchg_to_warm = false;
@@ -3659,18 +3659,13 @@ void oplus_voocphy_handle_voocphy_status(struct work_struct *work)
 		voocphy_info("fastchg dummy start: [%d], adapter version: [0x%0x]\n",
 		             chip->fastchg_dummy_start, chip->fast_chg_type);
 		oplus_chg_track_set_fastchg_break_code(
-			TRACK_CP_VOOCPHY_BREAK_DEFAULT);
+			TRACK_ADSP_VOOCPHY_BREAK_DEFAULT);
 		oplus_chg_wake_update_work();
 	} else if ((intval & 0xFF) == FAST_NOTIFY_ONGOING) {
 		chip->fastchg_ing = true;
 		voocphy_info("voocphy fastchg_ing: [%d]\n", chip->fastchg_ing);
-	} else if (intval == FAST_NOTIFY_FULL || intval == FAST_NOTIFY_BAD_CONNECTED
-		   || intval == FAST_NOTIFY_BTB_TEMP_OVER) {
-		if (intval != FAST_NOTIFY_BTB_TEMP_OVER) {
-			voocphy_info("%s\r\n", intval == FAST_NOTIFY_FULL ? "FAST_NOTIFY_FULL" : "FAST_NOTIFY_BAD_CONNECTED");
-		} else {
-			voocphy_info("FAST_NOTIFY_BTB_TEMP_OVER");
-		}
+	} else if (intval == FAST_NOTIFY_FULL || intval == FAST_NOTIFY_BAD_CONNECTED) {
+		voocphy_info("%s\r\n", intval == FAST_NOTIFY_FULL ? "FAST_NOTIFY_FULL" : "FAST_NOTIFY_BAD_CONNECTED");
 		oplus_chg_set_chargerid_switch_val(0);
 		oplus_vooc_switch_mode(NORMAL_CHARGER_MODE);
 		if (intval == FAST_NOTIFY_FULL)
@@ -3931,11 +3926,6 @@ void oplus_voocphy_set_status_and_notify_ap(struct oplus_voocphy_manager *chip,
 		oplus_chg_track_set_fastchg_break_code(
 			TRACK_CP_VOOCPHY_BTB_TEMP_OVER);
 		oplus_voocphy_reset_temp_range(chip);
-		chip->fastchg_to_normal = true;
-		/*stop monitor thread*/
-		oplus_voocphy_monitor_stop(chip);
-		oplus_voocphy_reset_voocphy();
-		oplus_voocphy_commu_process_handle(false);
 		voocphy_err("FAST_NOTIFY_BTB_TEMP_OVER");
 		break;
 	default:
@@ -5320,9 +5310,6 @@ static int oplus_voocphy_check_spec_curr(int *target_curr)
 }
 
 #define VOOC_WARM_TEMP_RANGE_THD    20
-#define BTB_CHECK_MAX_CNT	    3
-#define BTB_CHECK_TIME_US	    10000
-#define BTB_OVER_TEMP		    80
 bool oplus_voocphy_check_fastchg_real_allow(void)
 {
 	struct oplus_voocphy_manager *chip = g_voocphy_chip;
@@ -5331,9 +5318,6 @@ bool oplus_voocphy_check_fastchg_real_allow(void)
 	int batt_temp = 0;
 	int target_curr;
 	bool ret = false;
-	int btb_temp;
-	int usb_temp;
-	int btb_check_cnt = BTB_CHECK_MAX_CNT;
 
 	batt_soc = oplus_chg_get_ui_soc();			// get batt soc
 	if (chip->batt_fake_soc) {
@@ -5382,29 +5366,6 @@ bool oplus_voocphy_check_fastchg_real_allow(void)
 		ret = true;
 	else
 		ret = false;
-
-	while (btb_check_cnt != 0) {
-		voocphy_err("use adc ctrl!\n");
-		oplus_chg_adc_switch_ctrl();
-
-		btb_temp = oplus_chg_get_battery_btb_temp_cal();
-		usb_temp = oplus_chg_get_usb_btb_temp_cal();
-		voocphy_err("btb_temp: %d", btb_temp);
-
-		if (btb_temp < BTB_OVER_TEMP && usb_temp < BTB_OVER_TEMP) {
-			break;
-		}
-
-		btb_check_cnt--;
-		if (btb_check_cnt > 0) {
-			usleep_range(BTB_CHECK_TIME_US, BTB_CHECK_TIME_US);
-		}
-	}
-
-	if (btb_check_cnt == 0) {
-		ret = false;
-		chip->btb_temp_over = true;
-	}
 
 	voocphy_info("ret:%d, temp:%d, soc:%d", ret, batt_temp, batt_soc);
 
@@ -7170,7 +7131,6 @@ void oplus_adsp_voocphy_clear_status(void)
 		return;
 
 	g_voocphy_chip->fastchg_dummy_start = false;
-	g_voocphy_chip->btb_temp_over = false;
 	g_voocphy_chip->fastchg_ing = false;
 	g_voocphy_chip->fastchg_start = false;
 	g_voocphy_chip->fastchg_to_normal = false;

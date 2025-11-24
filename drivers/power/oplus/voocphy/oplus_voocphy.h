@@ -448,8 +448,6 @@ struct batt_sys_curve {
 
 #define DUMP_REG_CNT 49
 
-#define COOL_DOWN_NUM_MAX	32
-
 struct batt_sys_curves {
 	struct batt_sys_curve batt_sys_curve[BATT_SYS_ROW_MAX];
 	unsigned char sys_curv_num;
@@ -566,9 +564,9 @@ struct oplus_voocphy_manager {
 	unsigned char adapter_model_ver;
 	unsigned char adapter_model_count; //obtain adapter_model need times
 	unsigned char ask_batt_sys; //batt_sys
-	unsigned int svooc_cool_down_current_limit[COOL_DOWN_NUM_MAX];
+	unsigned int svooc_cool_down_current_limit[16];
 	unsigned int svooc_cool_down_num;
-	unsigned int vooc_cool_down_current_limit[COOL_DOWN_NUM_MAX];
+	unsigned int vooc_cool_down_current_limit[16];
 	unsigned int vooc_cool_down_num;
 	unsigned int current_default;
 	unsigned int current_expect;
@@ -904,5 +902,4 @@ bool oplus_voocphy_get_detach_unexpectly(void);
 void oplus_voocphy_set_detach_unexpectly(bool val);
 int oplus_voocphy_enter_ship_mode(void);
 int oplus_voocphy_adjust_current_by_cool_down(int val);
-bool oplus_voocphy_get_btb_temp_over(void);
 #endif /* _OPLUS_VOOCPHY_H_ */

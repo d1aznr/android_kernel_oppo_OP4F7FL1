@@ -4262,23 +4262,9 @@ static int pd_tcp_notifier_call(struct notifier_block *pnb,
 			oplus_chg_wake_update_work();
 			oplus_wake_up_usbtemp_thread();
 		} else {
-			if (!pinfo->wait_hard_reset_complete)
-				oplus_chg_set_charger_type_unknown();
+			oplus_chg_set_charger_type_unknown();
 		}
 		break;
-	case TCP_NOTIFY_HARD_RESET_STATE:
-		switch (noti->hreset_state.state) {
-		case TCP_HRESET_SIGNAL_SEND:
-		case TCP_HRESET_SIGNAL_RECV:
-			pinfo->wait_hard_reset_complete = true;
-			break;
-		default:
-			pinfo->wait_hard_reset_complete = false;
-			break;
-		}
-		pr_err("pd_wait_hard_reset_complete: %d\n", pinfo->wait_hard_reset_complete);
-		break;
-
 	}
 	return ret;
 }
@@ -4854,7 +4840,7 @@ int oplus_mt6375_get_tchg(int *tchg_min,	int *tchg_max)
 bool oplus_tchg_01c_precision(void)
 {
 	if (!pinfo) {
-		printk(KERN_ERR "[OPLUS_CHG][%s]: charger_data not ready!\n", __func__);
+		printk(KERN_ERR "[OPPO_CHG][%s]: charger_data not ready!\n", __func__);
 		return false;
 	}
 	return pinfo->support_ntc_01c_precision;
@@ -5349,7 +5335,6 @@ void oplus_wd0_detect_work(struct work_struct *work)
 	if (level != 1) {
 		oplus_wake_up_usbtemp_thread();
 	} else {
-		oplus_chg_clear_abnormal_adapter_var();
 		chip->usbtemp_check = oplus_usbtemp_condition();
 
 		if (chip->usb_status == USB_TEMP_HIGH) {
@@ -6838,7 +6823,7 @@ bool oplus_mt_get_vbus_status(void)
 		return false;
 	}
 
-	if (is_charger_exist(pinfo) || info->chrdet_state || info->wait_hard_reset_complete) {
+	if (is_charger_exist(pinfo) || pinfo->chrdet_state) {
 		return true;
 	} else if (oplus_wpc_get_wireless_charge_start() || oplus_chg_is_wls_present()) {
 		return true;

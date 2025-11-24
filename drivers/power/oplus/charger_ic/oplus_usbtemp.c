@@ -14,7 +14,6 @@
 #include "../oplus_gauge.h"
 #include "../oplus_vooc.h"
 #include "oplus_switching.h"
-#include "../oplus_pps.h"
 
 #define USB_20C 20
 #define USB_30C 30
@@ -177,13 +176,6 @@ int oplus_usbtemp_dischg_action(struct oplus_chg_chip *chip)
 		oplus_set_usb_temp_high(chip);
 		if (oplus_vooc_get_fastchg_started() == true) {
 			oplus_vooc_turn_off_fastchg();
-			if (oplus_pps_get_support_type() == PPS_SUPPORT_2CP) {
-				oplus_pps_set_pps_mos_enable(false);
-			}
-		}
-		if (oplus_is_pps_charging()) {
-			chg_err("oplus_pps_stop_usb_temp\n");
-			oplus_pps_stop_usb_temp();
 		}
 
 		usleep_range(10000,10000);///msleep(10);

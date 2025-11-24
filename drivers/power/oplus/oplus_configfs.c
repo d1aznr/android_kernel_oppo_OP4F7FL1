@@ -252,9 +252,7 @@ static ssize_t fast_chg_type_show(struct device *dev, struct device_attribute *a
 		return -EINVAL;
 	}
 
-	if (chip->charger_type == POWER_SUPPLY_TYPE_USB_PD_SDP ||
-	    (CHARGER_SUBTYPE_PD == type && (chip->pd_svooc || chip->charger_type == POWER_SUPPLY_TYPE_USB ||
-					    chip->charger_type == POWER_SUPPLY_TYPE_USB_CDP))) {
+	if (CHARGER_SUBTYPE_PD == type && chip->pd_svooc) {
 		type = CHARGER_SUBTYPE_DEFAULT;
 	}
 
@@ -792,7 +790,6 @@ static ssize_t mmi_charging_enable_store(struct device *dev, struct device_attri
 			if (oplus_voocphy_get_bidirect_cp_support() && chip->chg_ops->check_chrdet_status()) {
 				oplus_voocphy_set_chg_auto_mode(true);
 			}
-			oplus_pps_set_mmi_status(false);
 		}
 	} else {
 		if (chip->unwakelock_chg == 1) {
@@ -812,7 +809,6 @@ static ssize_t mmi_charging_enable_store(struct device *dev, struct device_attri
 			if (oplus_chg_get_voocphy_support() == ADSP_VOOCPHY) {
 				oplus_adsp_voocphy_turn_on();
 			}
-			oplus_pps_set_mmi_status(true);
 		}
 	}
 
@@ -2026,26 +2022,11 @@ static ssize_t mutual_cmd_store(struct device *dev, struct device_attribute *att
 }
 static DEVICE_ATTR_RW(mutual_cmd);
 
-static ssize_t boot_completed_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct oplus_chg_chip *chip = NULL;
-
-	chip = (struct oplus_chg_chip *)dev_get_drvdata(oplus_common_dir);
-	if (!chip) {
-		chg_err("chip is NULL\n");
-		return -EINVAL;
-	}
-
-	return sprintf(buf, "%d\n", chip->boot_completed);
-}
-static DEVICE_ATTR_RO(boot_completed);
-
 static struct device_attribute *oplus_common_attributes[] = {
 #ifdef OPLUS_CHG_ADB_ROOT_ENABLE
 	&dev_attr_charge_parameter,
 #endif
 	&dev_attr_mutual_cmd,
-	&dev_attr_boot_completed,
 	NULL
 };
 #ifdef OPLUS_FEATURE_CHG_BASIC

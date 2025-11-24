@@ -2465,21 +2465,6 @@ static void oplus_charger_type_check_work(struct work_struct *work)
 
 }
 
-int oplus_chg_wired_get_break_sub_crux_info(char *crux_info)
-{
-	struct battery_chg_dev *bcdev = NULL;
-	struct oplus_chg_chip *chip = g_oplus_chip;
-
-	if (!chip) {
-		chg_err("chip is NULL!\n");
-		return -1;
-	}
-	bcdev = chip->pmic_spmi.bcdev_chip;
-
-	pr_info("real_chg_type:%d\n", bcdev->real_chg_type);
-	return bcdev->real_chg_type;
-}
-
 static int usb_psy_get_prop(struct power_supply *psy,
 		enum power_supply_property prop,
 		union power_supply_propval *pval)
@@ -2975,7 +2960,7 @@ static int battery_psy_get_prop(struct power_supply *psy,
 				pval->intval = chip->tbatt_temp - chip->offset_temp;
 			}
 		} else {
-			pval->intval = oplus_get_report_batt_temp() - chip->offset_temp;
+			pval->intval = chip->tbatt_temp - chip->offset_temp;
 		}
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
@@ -5630,19 +5615,19 @@ bool oplus_usbtemp_temp_rise_fast_without_batt_temp(void)
 		return false;
 
 	if (g_oplus_chip->usbtemp_curr_status == OPLUS_USBTEMP_LOW_CURR) {
-		if ((((g_oplus_chip->usb_temp_l - g_tbatt_temp / 10) >=
+		if ((((g_oplus_chip->usb_temp_l - g_tbatt_temp / 10) >
 				g_oplus_chip->usbtemp_temp_gap_low_without_batt_temp)
 				&& (g_oplus_chip->usb_temp_l < USB_100C)) ||
-			(((g_oplus_chip->usb_temp_r - g_tbatt_temp / 10) >=
+			(((g_oplus_chip->usb_temp_r - g_tbatt_temp / 10) >
 				g_oplus_chip->usbtemp_temp_gap_low_without_batt_temp)
 				&& (g_oplus_chip->usb_temp_r < USB_100C)))
 			return true;
 		return false;
 	} else if (g_oplus_chip->usbtemp_curr_status == OPLUS_USBTEMP_HIGH_CURR) {
-		if ((((g_oplus_chip->usb_temp_l - g_tbatt_temp / 10) >=
+		if ((((g_oplus_chip->usb_temp_l - g_tbatt_temp / 10) >
 				g_oplus_chip->usbtemp_temp_gap_high_without_batt_temp)
 				&& (g_oplus_chip->usb_temp_l < USB_100C)) ||
-			(((g_oplus_chip->usb_temp_r - g_tbatt_temp / 10) >=
+			(((g_oplus_chip->usb_temp_r - g_tbatt_temp / 10) >
 				g_oplus_chip->usbtemp_temp_gap_high_without_batt_temp)
 				&& (g_oplus_chip->usb_temp_r < USB_100C)))
 			return true;
@@ -5777,17 +5762,17 @@ bool oplus_usbtemp_trigger_for_rise_fast_temp(struct oplus_chg_chip *chip, int r
 			mdelay(RETRY_CNT_DELAY);
 			get_usb_temp(chip);
 			if (chip->usbtemp_curr_status == OPLUS_USBTEMP_LOW_CURR) {
-				if ((chip->usb_temp_r >= g_tbatt_temp/10 + chip->usbtemp_temp_gap_low_with_batt_temp)
+				if ((chip->usb_temp_r >= chip->tbatt_temp/10 + chip->usbtemp_temp_gap_low_with_batt_temp)
 						&& chip->usb_temp_r < USB_100C)
 					count_r++;
-				if ((chip->usb_temp_l >= g_tbatt_temp/10 + chip->usbtemp_temp_gap_low_with_batt_temp)
+				if ((chip->usb_temp_l >= chip->tbatt_temp/10 + chip->usbtemp_temp_gap_low_with_batt_temp)
 						&& chip->usb_temp_l < USB_100C)
 					count_l++;
 			} else if (chip->usbtemp_curr_status == OPLUS_USBTEMP_HIGH_CURR) {
-				if ((chip->usb_temp_r >= g_tbatt_temp/10 + chip->usbtemp_temp_gap_high_with_batt_temp)
+				if ((chip->usb_temp_r >= chip->tbatt_temp/10 + chip->usbtemp_temp_gap_high_with_batt_temp)
 						&& chip->usb_temp_r < USB_100C)
 					count_r++;
-				if ((chip->usb_temp_l >= g_tbatt_temp/10 + chip->usbtemp_temp_gap_high_with_batt_temp)
+				if ((chip->usb_temp_l >= chip->tbatt_temp/10 + chip->usbtemp_temp_gap_high_with_batt_temp)
 						&& chip->usb_temp_l < USB_100C)
 					count_l++;
 			}
@@ -5818,8 +5803,6 @@ bool oplus_usbtemp_trigger_for_rise_fast_without_temp(struct oplus_chg_chip *chi
 		if (count == 0) {
 			last_usb_temp_r = chip->usb_temp_r;
 			last_usb_temp_l = chip->usb_temp_l;
-			current_temp_r = chip->usb_temp_r;
-			current_temp_l = chip->usb_temp_l;
 		} else {
 			current_temp_r = chip->usb_temp_r;
 			current_temp_l = chip->usb_temp_l;
@@ -5828,10 +5811,7 @@ bool oplus_usbtemp_trigger_for_rise_fast_without_temp(struct oplus_chg_chip *chi
 				|| oplus_usbtemp_judge_temp_gap(current_temp_r, last_usb_temp_r)) {
 			for (i = 1; i <= retry_cnt; i++) {
 				mdelay(RETRY_CNT_DELAY);
-				oplus_get_usbtemp_volt(chip);
 				get_usb_temp(chip);
-				current_temp_l = chip->usb_temp_l;
-				current_temp_r = chip->usb_temp_r;
 				if (oplus_usbtemp_judge_temp_gap(current_temp_r, last_usb_temp_r)
 						&& chip->usb_temp_r < USB_100C)
 					count_r++;
@@ -5909,9 +5889,9 @@ static int oplus_usbtemp_monitor_main_new_method(void *data)
 		current_read_count = current_read_count + 1;
 		if (current_read_count == OPLUS_CHG_CURRENT_READ_COUNT) {
 			if (oplus_vooc_get_allow_reading()) {
-				chip->usbtemp_batt_current = -oplus_gauge_get_batt_current();
+				chip->usbtemp_batt_current = oplus_gauge_get_batt_current();
 			} else {
-				chip->usbtemp_batt_current = -oplus_gauge_get_prev_batt_current();
+				chip->usbtemp_batt_current = oplus_gauge_get_prev_batt_current();
 			}
 			current_read_count = 0;
 		}
