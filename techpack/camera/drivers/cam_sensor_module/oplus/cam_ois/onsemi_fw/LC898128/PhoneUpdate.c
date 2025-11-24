@@ -19,6 +19,8 @@
 
 #include	"FromCode_01_02_01_00.h"
 #include	"FromCode_01_02_02_01.h"
+//OPLUS ois firmware
+#include	"FromCode_01_01_01_02.h"
 
 /* Burst Length for updating to PMEM */
 #define BURST_LENGTH_UC 		( 3*20 ) 	// 60 Total:63Byte Burst
@@ -43,10 +45,10 @@ extern void	WitTim( UINT_16 );
 //**************************
 //	Table of download file
 //**************************
+
 const DOWNLOAD_TBL_EXT DTbl[] = {
-	{0x010100, 1, CcUpdataCode128_01_02_01_00, UpDataCodeSize_01_02_01_00,  UpDataCodeCheckSum_01_02_01_00, CcFromCode128_01_02_01_00, sizeof(CcFromCode128_01_02_01_00), FromCheckSum_01_02_01_00, FromCheckSumSize_01_02_01_00 },
-	{0x010201, 1, CcUpdataCode128_01_02_02_01, UpDataCodeSize_01_02_02_01,  UpDataCodeCheckSum_01_02_02_01, CcFromCode128_01_02_02_01, sizeof(CcFromCode128_01_02_02_01), FromCheckSum_01_02_02_01, FromCheckSumSize_01_02_02_01 },
-	{0xFFFFFF, 0,         (void*)0,                         0,                            0,                         (void*)0,                          0,                             0,                        0}
+	{0x010102, CcUpdataCode128_01_01_01_02, UpDataCodeSize_01_01_01_02,  UpDataCodeCheckSum_01_01_01_02, CcFromCode128_01_01_01_02, sizeof(CcFromCode128_01_01_01_02), FromCheckSum_01_01_01_02, FromCheckSumSize_01_01_01_02 },
+	{0xFFFFFF, (void*)0,                         0,                            0,                         (void*)0,                          0,                             0,                        0}
 };
 
 //********************************************************************************
@@ -670,9 +672,9 @@ UINT_8 FlashDownload128( UINT_8 ModuleVendor, UINT_8 ActVer, UINT_8 MasterSlave,
 	ptr = ( DOWNLOAD_TBL_EXT * )DTbl ;
 
 	do {
-		if((ptr->Index == ( ((UINT_32)ModuleVendor<<16) + ((UINT_32)ActVer<<8) + MasterSlave)) && (ptr->FWType == FWType)) {
+		if(1) {
 
-			// UploadFile‚ª64Byte‚Ý‚ÉPadding‚³‚ê‚Ä‚¢‚È‚¢‚È‚ç‚ÎAErrorB
+			// UploadFileï¿½ï¿½64Byteï¿½ï¿½ï¿½Ý‚ï¿½Paddingï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½È‚ï¿½ï¿½È‚ï¿½ÎAErrorï¿½B
 			if( ( ptr->SizeFromCode % 64 ) != 0 )	return (0xF1) ;
 
 			if(!RamRead32A(0x8000, &data1)) {
@@ -681,9 +683,10 @@ UINT_8 FlashDownload128( UINT_8 ModuleVendor, UINT_8 ActVer, UINT_8 MasterSlave,
 								   ptr->FromCode[154] << 16 |
 								   ptr->FromCode[155] << 8 |
 								   ptr->FromCode[156])) &&
-						((data2 & 0xFFFFFF00 ) == (ptr->FromCode[158] << 24 |
+						(data2 == (ptr->FromCode[158] << 24 |
 								   ptr->FromCode[159] << 16 |
-								   ptr->FromCode[160] << 8 ))) {
+								   ptr->FromCode[160] << 8 |
+								   ptr->FromCode[161]))) {
 							TRACE("The FW 0x%x:0x%x is the latest, no need to upload\n", data1, data2);
 							return 0;
 					} else {

@@ -7,10 +7,9 @@
 //**************************
 #include "Ois.h"
 
-#if ((((SELECT_VENDOR&0x01) == 0x01) || ((SELECT_VENDOR&0x80) == 0x80)) && (SELECT_MODEL == 0x02))				// SEMCO or Oneplus
+#if ((((SELECT_VENDOR&0x01) == 0x01) || ((SELECT_VENDOR&0x80) == 0x80)) && (SELECT_MODEL == 0x02))				// SEMCO or Oplus
 #include "LC898124EP3_Code_2_1_0_3_2_0.h"		// Gyro=BMI260,	SO2823
 #include "LC898124EP3_Code_2_1_0_3_2_1.h"		// Gyro=BMI260,	FRA, SO2823
-#include "LC898124EP3_Code_2_1_0_0_2_0.h"               // Gyro=ICM42631, SO2823
 #endif
 
 //****************************************************
@@ -231,10 +230,9 @@ UINT8 GetInfomationBeforeDownload( DSPVER* Info, const UINT8* DataDM,  UINT32 Le
 //********************************************************************************
 
 const DOWNLOAD_TBL DTbl124[] = {
-#if ((((SELECT_VENDOR&0x01) == 0x01) || ((SELECT_VENDOR&0x80) == 0x80)) && (SELECT_MODEL == 0x02))				// SEMCO or Oneplus
+#if ((((SELECT_VENDOR&0x01) == 0x01) || ((SELECT_VENDOR&0x80) == 0x80)) && (SELECT_MODEL == 0x02))				// SEMCO or Oplus
  {0x0003, 1, LC898124EP3_PM_2_1_0_3_2_0, LC898124EP3_PMSize_2_1_0_3_2_0, (UINT32)((UINT32)LC898124EP3_PMCheckSum_2_1_0_3_2_0 + (UINT32)LC898124EP3_DMA_CheckSum_2_1_0_3_2_0 + (UINT32)LC898124EP3_DMB_CheckSum_2_1_0_3_2_0), LC898124EP3_DM_2_1_0_3_2_0, LC898124EP3_DMA_ByteSize_2_1_0_3_2_0 , LC898124EP3_DMB_ByteSize_2_1_0_3_2_0 },
  {0x0083, 1, LC898124EP3_PM_2_1_0_3_2_1, LC898124EP3_PMSize_2_1_0_3_2_1, (UINT32)((UINT32)LC898124EP3_PMCheckSum_2_1_0_3_2_1 + (UINT32)LC898124EP3_DMA_CheckSum_2_1_0_3_2_1 + (UINT32)LC898124EP3_DMB_CheckSum_2_1_0_3_2_1), LC898124EP3_DM_2_1_0_3_2_1, LC898124EP3_DMA_ByteSize_2_1_0_3_2_1 , LC898124EP3_DMB_ByteSize_2_1_0_3_2_1 },
- {0x0000, 1, LC898124EP3_PM_2_1_0_0_2_0, LC898124EP3_PMSize_2_1_0_0_2_0, (UINT32)((UINT32)LC898124EP3_PMCheckSum_2_1_0_0_2_0 + (UINT32)LC898124EP3_DMA_CheckSum_2_1_0_0_2_0 + (UINT32)LC898124EP3_DMB_CheckSum_2_1_0_0_2_0), LC898124EP3_DM_2_1_0_0_2_0, LC898124EP3_DMA_ByteSize_2_1_0_0_2_0 , LC898124EP3_DMB_ByteSize_2_1_0_0_2_0 },
 #endif
  {0xFFFF, 0, (void*)0, 0, 0, (void*)0 ,0 ,0 }
 };
@@ -242,13 +240,15 @@ const DOWNLOAD_TBL DTbl124[] = {
 unsigned char SelectDownload(UINT8 GyroSelect, UINT8 ActSelect, UINT8 MasterSlave, UINT8 FWType)
 {
 	DSPVER Dspcode;
-	DOWNLOAD_TBL *ptr;
+	DOWNLOAD_TBL *ptr = NULL;
     CAM_INFO(CAM_OIS, "GyroSelect:0x%x, ActSelect:0x%x, MasterSlave:0x%x, FWType:%d\n", GyroSelect, ActSelect, MasterSlave, FWType);
 
 	if ((MasterSlave == 0x00) || (MasterSlave == 0x02)) {		//20190522 Komori
 		ptr = ( DOWNLOAD_TBL *)DTbl124;
 	}
-
+	if (ptr == NULL) {
+		return(0xF1);
+	}
 	/* どのCodeをDownloadするのかTableから検索 */
 	while (ptr->Cmd != 0xFFFF ){
 		if( (ptr->Cmd == ( ((uint16_t)ActSelect<<8) + GyroSelect)) && (ptr->FWType == FWType) ) break;

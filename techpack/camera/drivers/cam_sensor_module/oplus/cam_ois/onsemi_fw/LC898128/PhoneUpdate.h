@@ -40,7 +40,6 @@
 //****************************************************
 typedef struct {
 	UINT_32				Index;
-	UINT_8	            FWType;    // 1: Normal OIS FW, 2: Servo ON FW
 	const UINT_8*		UpdataCode;
 	UINT_32				SizeUpdataCode;
 	UINT_64				SizeUpdataCodeCksm;
@@ -49,6 +48,8 @@ typedef struct {
 	UINT_64				SizeFromCodeCksm;
 	UINT_32				SizeFromCodeValid;
 }	DOWNLOAD_TBL_EXT;
+
+
 
 typedef struct STRECALIB {
 	INT_16	SsFctryOffX ;
@@ -146,7 +147,7 @@ typedef union ULLNVAL	UnllnVal;
 #define 	SYSDSP_REMAP					0xD000AC
 #define 	SYSDSP_CVER						0xD00100
 #define		ROMINFO							0xE050D4
-#define FLASHROM_128		0xE07000	// Flash Memory I/F”z’uƒAƒhƒŒƒX
+#define FLASHROM_128		0xE07000	// Flash Memory I/Fï¿½zï¿½uï¿½Aï¿½hï¿½ï¿½ï¿½X
 #define 		FLASHROM_FLA_RDAT					(FLASHROM_128 + 0x00)
 #define 		FLASHROM_FLA_WDAT					(FLASHROM_128 + 0x04)
 #define 		FLASHROM_ACSCNT						(FLASHROM_128 + 0x08)
@@ -273,6 +274,7 @@ typedef union ULLNVAL	UnllnVal;
 #define		CMD_OSC_DETECTION				0xF017			
 	#define		OSC_DTCT_DISABLE				0x00000000
 	#define		OSC_DTCT_ENABLE					0x00000001
+#define		CMD_OIS_SHIFT_CAL				0xF018
 #define		CMD_SSC_ENABLE					0xF01C			
 	#define		SSC_DISABLE						0x00000000	
 	#define		SSC_ENABLE						0x00000001	
