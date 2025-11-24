@@ -169,7 +169,6 @@ struct dsi_panel_reset_config {
 	int lcd_mode_sel_gpio;
 	u32 mode_sel_state;
 #ifdef OPLUS_BUG_STABILITY
-	int tp_cs_gpio;
 	int panel_vout_gpio;
 	int panel_te_esd_gpio;
 	int panel_vddr_aod_en_gpio;

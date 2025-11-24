@@ -485,4 +485,4 @@ static void __exit oplus_display_panel_exit(void)
 module_init(oplus_display_panel_init);
 module_exit(oplus_display_panel_exit);
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("Lisheng");
+MODULE_AUTHOR("Lisheng <lisheng1@oplus.com>");

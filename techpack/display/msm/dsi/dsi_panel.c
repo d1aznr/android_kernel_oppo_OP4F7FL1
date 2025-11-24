@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -131,7 +130,7 @@ static u32 dsi_dsc_rc_buf_thresh[] = {0x0e, 0x1c, 0x2a, 0x38, 0x46, 0x54,
  * Rate control - Min QP values for each ratio type in dsi_dsc_ratio_type
  */
 static char dsi_dsc_rc_range_min_qp_1_1[][15] = {
-	{0, 0, 1, 1, 3, 3, 3, 3, 3, 3, 5, 5, 5, 7, 13},
+	{0, 0, 1, 1, 3, 3, 3, 3, 3, 3, 5, 5, 5, 7, 12},
 	{0, 4, 5, 5, 7, 7, 7, 7, 7, 7, 9, 9, 9, 11, 17},
 	{0, 4, 9, 9, 11, 11, 11, 11, 11, 11, 13, 13, 13, 15, 21},
 	{0, 4, 5, 6, 7, 7, 7, 7, 7, 7, 9, 9, 9, 11, 15},
@@ -414,15 +413,6 @@ static int dsi_panel_gpio_request(struct dsi_panel *panel)
 		}
 	}
 
-	if (gpio_is_valid(r_config->tp_cs_gpio)) {
-		rc = gpio_request(r_config->tp_cs_gpio, "panel_tp_cs_gpio");
-		if (rc) {
-			DSI_ERR("request for panel_tp_cs_gpio failed, rc=%d\n", rc);
-			if (gpio_is_valid(r_config->tp_cs_gpio))
-				gpio_free(r_config->tp_cs_gpio);
-		}
-	}
-
 	if (gpio_is_valid(r_config->panel_te_esd_gpio)) {
 		rc = gpio_request(r_config->panel_te_esd_gpio, "panel_te_esd_gpio");
 		if (rc)
@@ -649,12 +639,7 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 		}
 	}
 #endif /*OPLUS_BUG_STABILITY*/
-	if (gpio_is_valid(panel->reset_config.tp_cs_gpio)) {
-		rc = gpio_direction_output(panel->reset_config.tp_cs_gpio, 1);
-		if (rc)
-			DSI_ERR("unable to set dir for tp_cs_gpio rc=%d", rc);
-		gpio_set_value(panel->reset_config.tp_cs_gpio, 1);
-	}
+
 #ifdef OPLUS_BUG_STABILITY
 	dis_set_first_level = 1;
 	if(panel->nt36523w_ktz8866) {
@@ -866,13 +851,6 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 		rc = turn_on_ktz8866_hw_en(false);
 		if (rc) {
 			DSI_ERR("[%s] failed set turn_on_ktz8866_hw_en false, rc=%d\n", panel->name, rc);
-		}
-
-		if(gpio_is_valid(panel->reset_config.tp_cs_gpio)) {
-			rc = gpio_direction_output(panel->reset_config.tp_cs_gpio, 0);
-			if (rc)
-				DSI_ERR("unable to set dir for tp_cs_gpio rc=%d", rc);
-			gpio_set_value(panel->reset_config.tp_cs_gpio, 0);
 		}
 	}
 #endif
@@ -3188,12 +3166,6 @@ static int dsi_panel_parse_gpios(struct dsi_panel *panel)
 		DSI_DEBUG("[%s] vddr-gpio is not set, rc=%d\n",
 			 panel->name, rc);
 	}
-
-	panel->reset_config.tp_cs_gpio = utils->get_named_gpio(utils->data,
-					      "qcom,platform-tp-cs-gpio", 0);
-	if (!gpio_is_valid(panel->reset_config.tp_cs_gpio)) {
-		DSI_ERR("[%s] failed get qcom,platform-tp-cs-gpio, rc=%d\n", panel->name, rc);
-	}
 #endif
 
 	panel->reset_config.disp_en_gpio = utils->get_named_gpio(utils->data,
@@ -4614,14 +4586,18 @@ int dsi_panel_drv_init(struct dsi_panel *panel,
 		DSI_ERR("[%s] failed to request gpios, rc=%d\n", panel->name,
 		       rc);
 #if defined(OPLUS_FEATURE_PXLW_IRIS5)
-		if (iris_is_chip_supported()) {
-			if (!strcmp(panel->type, "primary"))
-				goto error_pinctrl_deinit;
-			rc = 0;
-		} else 
+        if (iris_is_chip_supported()) {
+            if (!strcmp(panel->type, "primary")) {
+                goto error_pinctrl_deinit;
+            }
+
+            rc = 0;
+        } else
 #endif
-		goto error_pinctrl_deinit;
+		    goto error_pinctrl_deinit;
+	    
 	}
+
 
 	rc = dsi_panel_bl_register(panel);
 	if (rc) {
@@ -5337,8 +5313,7 @@ int dsi_panel_set_nolp(struct dsi_panel *panel)
 #ifdef OPLUS_BUG_STABILITY
 	if ((!strcmp(panel->oplus_priv.vendor_name, "AMS643YE01") ||
 		!strcmp(panel->oplus_priv.vendor_name, "AMS643YE01IN20057") ||
-		!strcmp(panel->name, "s6e3fc3_fhd_oled_cmd_samsung") ||
-		!strcmp(panel->oplus_priv.vendor_name, "SOFE03F")) &&
+		!strcmp(panel->name, "s6e3fc3_fhd_oled_cmd_samsung")) &&
 		(panel->bl_config.bl_level > panel->bl_config.brightness_normal_max_level)) {
 		if (!strcmp(panel->name,"samsung ams643ye01 in 20127 amoled fhd+ panel")) {
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_HBM_ENTER1_SWITCH);
