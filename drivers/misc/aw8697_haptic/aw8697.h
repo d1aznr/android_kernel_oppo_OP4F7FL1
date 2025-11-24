@@ -590,8 +590,8 @@ struct aw8697_que_seq {
 #define NEW_RING_END            160
 #define OS12_NEW_RING_START     70
 #define OS12_NEW_RING_END       89
-#define OPLUS_RING_START       161
-#define OPLUS_RING_END         167
+#define REALME_RING_START       161
+#define REALME_RING_END         167
 
 #define OPLUS_START_INDEX       201
 #define OPLUS_END_INDEX         326

@@ -633,18 +633,18 @@ static char aw_rtp_name_165Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_159.bin"},
 	{"aw8697_reserved_160.bin"},
 
-    /*  Added oplus ringtone start */
-	{"aw8697_oplus_its_oplus_RTP_161_165Hz.bin"},
-	{"aw8697_oplus_tune_RTP_162_165Hz.bin"},
-	{"aw8697_oplus_jingle_RTP_163_165Hz.bin"},
+    /*  Added realme ringtone start */
+	{"aw8697_realme_its_realme_RTP_161_165Hz.bin"},
+	{"aw8697_realme_tune_RTP_162_165Hz.bin"},
+	{"aw8697_realme_jingle_RTP_163_165Hz.bin"},
 	{"aw8697_reserved_164.bin"},
 	{"aw8697_reserved_165.bin"},
 	{"aw8697_reserved_166.bin"},
 	{"aw8697_reserved_167.bin"},
 	{"aw8697_reserved_168.bin"},
 	{"aw8697_reserved_169.bin"},
-	{"aw8697_oplus_gt_RTP_170_165Hz.bin"},
-    /*  Added oplus ringtone end */
+	{"aw8697_realme_gt_RTP_170_165Hz.bin"},
+    /*  Added realme ringtone end */
 };
 #endif /* OPLUS_FEATURE_CHG_BASIC */
 
@@ -827,16 +827,16 @@ static char aw_rtp_name[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_159.bin"},
 	{"aw8697_reserved_160.bin"},
 
-	{"aw8697_oplus_its_oplus_RTP_161_170Hz.bin"},
-	{"aw8697_oplus_tune_RTP_162_170Hz.bin"},
-	{"aw8697_oplus_jingle_RTP_163_170Hz.bin"},
+	{"aw8697_realme_its_realme_RTP_161_170Hz.bin"},
+	{"aw8697_realme_tune_RTP_162_170Hz.bin"},
+	{"aw8697_realme_jingle_RTP_163_170Hz.bin"},
 	{"aw8697_reserved_164.bin"},
 	{"aw8697_reserved_165.bin"},
 	{"aw8697_reserved_166.bin"},
 	{"aw8697_reserved_167.bin"},
 	{"aw8697_reserved_168.bin"},
 	{"aw8697_reserved_169.bin"},
-	{"aw8697_oplus_gt_RTP_170_170Hz.bin"},
+	{"aw8697_realme_gt_RTP_170_170Hz.bin"},
 	{"aw8697_Threefingers_Long_RTP_171.bin"},
 	{"aw8697_Threefingers_Up_RTP_172.bin"},
 	{"aw8697_Threefingers_Screenshot_RTP_173.bin"},
@@ -1045,18 +1045,18 @@ static char aw_rtp_name_175Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_159.bin"},
 	{"aw8697_reserved_160.bin"},
 
-    /*  Added oplus ringtone start */
-	{"aw8697_oplus_its_oplus_RTP_161_175Hz.bin"},
-	{"aw8697_oplus_tune_RTP_162_175Hz.bin"},
-	{"aw8697_oplus_jingle_RTP_163_175Hz.bin"},
+    /*  Added realme ringtone start */
+	{"aw8697_realme_its_realme_RTP_161_175Hz.bin"},
+	{"aw8697_realme_tune_RTP_162_175Hz.bin"},
+	{"aw8697_realme_jingle_RTP_163_175Hz.bin"},
 	{"aw8697_reserved_164.bin"},
 	{"aw8697_reserved_165.bin"},
 	{"aw8697_reserved_166.bin"},
 	{"aw8697_reserved_167.bin"},
 	{"aw8697_reserved_168.bin"},
 	{"aw8697_reserved_169.bin"},
-	{"aw8697_oplus_gt_RTP_170_175Hz.bin"},
-    /*  Added oplus ringtone end */
+	{"aw8697_realme_gt_RTP_170_175Hz.bin"},
+    /*  Added realme ringtone end */
 };
 #endif /* OPLUS_FEATURE_CHG_BASIC */
 
@@ -1256,9 +1256,9 @@ static char aw_rtp_name_19065_226Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_159.bin"},
 	{"aw8697_reserved_160.bin"},
 
-	{"aw8697_oplus_its_oplus_RTP_161_235Hz.bin"},
-	{"aw8697_oplus_tune_RTP_162_235Hz.bin"},
-	{"aw8697_oplus_jingle_RTP_163_235Hz.bin"},
+	{"aw8697_realme_its_realme_RTP_161_235Hz.bin"},
+	{"aw8697_realme_tune_RTP_162_235Hz.bin"},
+	{"aw8697_realme_jingle_RTP_163_235Hz.bin"},
 	{"aw8697_reserved_164.bin"},
 	{"aw8697_reserved_165.bin"},
 	{"aw8697_reserved_166.bin"},
@@ -1449,9 +1449,9 @@ static char aw_rtp_name_19065_230Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_159.bin"},
 	{"aw8697_reserved_160.bin"},
 
-	{"aw8697_oplus_its_oplus_RTP_161_235Hz.bin"},
-	{"aw8697_oplus_tune_RTP_162_235Hz.bin"},
-	{"aw8697_oplus_jingle_RTP_163_235Hz.bin"},
+	{"aw8697_realme_its_realme_RTP_161_235Hz.bin"},
+	{"aw8697_realme_tune_RTP_162_235Hz.bin"},
+	{"aw8697_realme_jingle_RTP_163_235Hz.bin"},
 	{"aw8697_reserved_164.bin"},
 	{"aw8697_reserved_165.bin"},
 	{"aw8697_reserved_166.bin"},
@@ -1643,9 +1643,9 @@ static char aw_rtp_name_19065_234Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_reserved_159.bin"},
 	{"aw8697_reserved_160.bin"},
 
-	{"aw8697_oplus_its_oplus_RTP_161_235Hz.bin"},
-	{"aw8697_oplus_tune_RTP_162_235Hz.bin"},
-	{"aw8697_oplus_jingle_RTP_163_235Hz.bin"},
+	{"aw8697_realme_its_realme_RTP_161_235Hz.bin"},
+	{"aw8697_realme_tune_RTP_162_235Hz.bin"},
+	{"aw8697_realme_jingle_RTP_163_235Hz.bin"},
 	{"aw8697_reserved_164.bin"},
 	{"aw8697_reserved_165.bin"},
 	{"aw8697_reserved_166.bin"},
@@ -4057,7 +4057,7 @@ static ssize_t rtp_store(struct device *dev, struct device_attribute *attr,
 	if (((val >=  RINGTONES_START_INDEX && val <= RINGTONES_END_INDEX)
 		|| (val >=  NEW_RING_START && val <= NEW_RING_END)
 		|| (val >=  OS12_NEW_RING_START && val <= OS12_NEW_RING_END)
-		|| (val >=  OPLUS_RING_START && val <= OPLUS_RING_END)
+		|| (val >=  REALME_RING_START && val <= REALME_RING_END)
 		|| val == RINGTONES_SIMPLE_INDEX
 		|| val == RINGTONES_PURE_INDEX
 		|| val == AUDIO_READY_STATUS)) {
