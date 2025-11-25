@@ -564,7 +564,6 @@
 		report_rate_white_list_support;
 		//smooth_level_support;
 		//smooth_level = <4>;
-		exception_upload_support;
 
 		/*
 		 *Virtual Key Config:

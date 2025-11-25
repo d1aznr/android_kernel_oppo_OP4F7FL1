@@ -845,7 +845,6 @@
 		sec_kernel_grip_para = <21000>;
 		auto_test_need_cal_support;
 		control_smooth_flag;
-		exception_upload_support;
 
 		/*
 		 *Virtual Key Config:

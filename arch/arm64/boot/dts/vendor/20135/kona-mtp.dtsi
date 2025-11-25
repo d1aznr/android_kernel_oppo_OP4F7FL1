@@ -606,7 +606,6 @@
 		irq_need_dev_resume_ok;
 		sec_kernel_grip_para = <21000>;
 		auto_test_need_cal_support;
-		exception_upload_support;
 		/*
 		 *Virtual Key Config:
 		 *1:touchpanel,button-type: <virtualkey_type  supportted_button-map>

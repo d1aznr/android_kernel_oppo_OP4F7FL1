@@ -510,7 +510,6 @@
 		pressure_report_support;
 		irq_need_dev_resume_ok;
 		report_rate_white_list_support;
-		exception_upload_support;
 
 		/*
 		 *Virtual Key Config:
