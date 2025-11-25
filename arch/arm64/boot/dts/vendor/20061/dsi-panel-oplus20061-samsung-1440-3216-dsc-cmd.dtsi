@@ -2921,5 +2921,5 @@
 &dsi_oplus20061_samsung_1440_3216_dsc_cmd {
 	oplus,color_vivid_status;
 	oplus,color_srgb_status;
-	oplus,apollo_backlight_enable;
+	//oplus,apollo_backlight_enable;
 };
