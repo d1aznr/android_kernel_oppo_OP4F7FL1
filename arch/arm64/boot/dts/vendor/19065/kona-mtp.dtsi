@@ -502,6 +502,8 @@
 		health_monitor_v2_support;
 		//ear_sense_support;
 		black_gesture_support;
+		black_gesture_indep_support;
+		sportify_aod_gesture_support;
 		//fw_edge_limit_support;
 		charger_pump_support;
 		//spurious_fingerprint_support;
