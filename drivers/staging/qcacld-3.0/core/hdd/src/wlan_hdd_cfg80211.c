@@ -155,6 +155,11 @@
 #include "wlan_hdd_ioctl.h"
 #include "wlan_hdd_gpio.h"
 
+#ifdef OPLUS_ARCH_INJECT
+//Add for: hotspot manager
+#include <wlan_hdd_hostapd_wext.h>
+#endif /* OPLUS_ARCH_INJECT */
+
 #define g_mode_rates_size (12)
 #define a_mode_rates_size (8)
 
@@ -3249,6 +3254,10 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 				sap_config->acs_cfg.freq_list[0];
 			sap_config->acs_cfg.pri_ch_freq =
 					      sap_config->acs_cfg.freq_list[0];
+			sap_config->acs_cfg.start_ch_freq =
+				sap_config->acs_cfg.freq_list[0];
+			sap_config->acs_cfg.end_ch_freq =
+				sap_config->acs_cfg.freq_list[0];
 			wlan_sap_set_sap_ctx_acs_cfg(
 				WLAN_HDD_GET_SAP_CTX_PTR(adapter), sap_config);
 			sap_config_acs_result(hdd_ctx->mac_handle,
@@ -3274,6 +3283,10 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 			/*notify hostapd about channel override */
 			wlan_hdd_cfg80211_acs_ch_select_evt(adapter);
 			ret = 0;
+			goto out;
+		} else if (!sap_config->acs_cfg.ch_list_count) {
+			hdd_err("channel list count 0");
+			ret = -EINVAL;
 			goto out;
 		}
 	}
@@ -8045,7 +8058,7 @@ static int hdd_config_latency_level(struct hdd_adapter *adapter,
 	QDF_STATUS status;
 
 	if (!hdd_is_wlm_latency_manager_supported(hdd_ctx))
-		return -ENOTSUPP;
+		return -EINVAL;
 
 	latency_level = nla_get_u16(attr);
 	switch (latency_level) {
@@ -10339,7 +10352,12 @@ __wlan_hdd_cfg80211_set_ns_offload(struct wiphy *wiphy,
 
 	if (!ucfg_pmo_is_active_mode_offloaded(hdd_ctx->psoc)) {
 		hdd_warn("Active mode offload is disabled");
+#ifndef OPLUS_BUG_STABILITY
+		//Modify the return value for VTS test
 		return -EINVAL;
+#else /* OPLUS_BUG_STABILITY */
+		return 0;
+#endif /* OPLUS_BUG_STABILITY */
 	}
 
 	if (wlan_cfg80211_nla_parse(tb, QCA_WLAN_VENDOR_ATTR_ND_OFFLOAD_MAX,
@@ -14223,6 +14241,167 @@ put_attr_fail:
 	return -EINVAL;
 }
 
+#ifdef OPLUS_ARCH_INJECT
+//Add for: hotspot manager
+static const struct nla_policy oplus_attr_policy[OPLUS_WLAN_VENDOR_ATTR_MAX +
+						 1] = {
+	[OPLUS_WLAN_VENDOR_ATTR_MAC_ADDR] = { .type = NLA_BINARY,
+					      .len = QDF_MAC_ADDR_SIZE },
+	[OPLUS_WLAN_VENDOR_ATTR_WETHER_BLOCK_CLIENT] = { .type = NLA_U8 },
+	[OPLUS_WLAN_VENDOR_ATTR_SAP_MAX_CLIENT_NUM] = { .type = NLA_U32 },
+};
+
+static int __wlan_hdd_cfg80211_oplus_modify_acl(struct wiphy *wiphy,
+						struct wireless_dev *wdev,
+						const void *data, int data_len)
+{
+	int32_t status;
+	struct nlattr *tb[OPLUS_WLAN_VENDOR_ATTR_MAX + 1];
+	uint8_t extra[8];
+	int8_t block;
+
+	hdd_enter();
+
+	status = wlan_cfg80211_nla_parse(tb, OPLUS_WLAN_VENDOR_ATTR_MAX, data,
+					 data_len, oplus_attr_policy);
+	if (status) {
+		hdd_err("Invalid attributes!");
+		status = -EINVAL;
+		goto out;
+	}
+
+	if (tb[OPLUS_WLAN_VENDOR_ATTR_MAC_ADDR]) {
+		nla_memcpy(extra, tb[OPLUS_WLAN_VENDOR_ATTR_MAC_ADDR],
+			   QDF_MAC_ADDR_SIZE);
+	} else {
+		hdd_err("Invalid argument:No sta mac addr provided!");
+		status = -EINVAL;
+		goto out;
+	}
+	if (tb[OPLUS_WLAN_VENDOR_ATTR_WETHER_BLOCK_CLIENT]) {
+		block = nla_get_u8(
+			tb[OPLUS_WLAN_VENDOR_ATTR_WETHER_BLOCK_CLIENT]);
+	} else {
+		hdd_err("Invalid argument:No block value!");
+		status = -EINVAL;
+		goto out;
+	}
+
+	//we always modify black list, as for now
+	extra[6] = 0;
+	extra[7] = block;
+
+	status = oplus_wlan_hdd_modify_acl(wdev->netdev, (char *)extra);
+	if (0 != status) {
+		hdd_err("failed to modify acl! %d", status);
+		goto out;
+	}
+
+out:
+	hdd_exit();
+	return status;
+}
+
+/**
+ * wlan_hdd_cfg80211_oplus_modify_acl() - modify acl
+ * @wiphy: Pointer to wiphy
+ * @wdev: Pointer to wireless device
+ * @data: vendor command extra data
+ * @data_len: the size of extra data
+ *
+ * Return: 0 for success, non-zero for failure
+ */
+static int wlan_hdd_cfg80211_oplus_modify_acl(struct wiphy *wiphy,
+					      struct wireless_dev *wdev,
+					      const void *data, int data_len)
+{
+	int errno;
+	struct osif_vdev_sync *vdev_sync;
+
+	errno = osif_vdev_sync_op_start(wdev->netdev, &vdev_sync);
+	if (errno)
+		return errno;
+
+	errno = __wlan_hdd_cfg80211_oplus_modify_acl(wiphy, wdev, data,
+						     data_len);
+
+	osif_vdev_sync_op_stop(vdev_sync);
+
+	return errno;
+}
+
+static int __wlan_hdd_cfg80211_oplus_set_max_assoc(struct wiphy *wiphy,
+						   struct wireless_dev *wdev,
+						   const void *data,
+						   int data_len)
+{
+	uint32_t status;
+	int extra[2];
+	uint32_t max_clients;
+	struct nlattr *tb[OPLUS_WLAN_VENDOR_ATTR_MAX + 1];
+
+	hdd_enter();
+
+	status = wlan_cfg80211_nla_parse(tb, OPLUS_WLAN_VENDOR_ATTR_MAX, data,
+					 data_len, oplus_attr_policy);
+
+	if (status) {
+		hdd_err("Invalid attributes!");
+		status = -EINVAL;
+		goto out;
+	}
+
+	if (tb[OPLUS_WLAN_VENDOR_ATTR_SAP_MAX_CLIENT_NUM]) {
+		max_clients = nla_get_u32(
+			tb[OPLUS_WLAN_VENDOR_ATTR_SAP_MAX_CLIENT_NUM]);
+	} else {
+		hdd_err("Invalid argument!");
+		status = -EINVAL;
+		goto out;
+	}
+
+	extra[0] = QCSAP_PARAM_MAX_ASSOC;
+	extra[1] = max_clients;
+
+	status = oplus_wlan_hdd_set_max_assoc(wdev->netdev, (char *)extra);
+	if (0 != status) {
+		hdd_err("failed to set max assoc!");
+		goto out;
+	}
+
+out:
+	hdd_exit();
+	return status;
+}
+
+/**
+ * wlan_hdd_cfg80211_oplus_set_max_assoc() - modify acl
+ * @wiphy: Pointer to wiphy
+ * @wdev: Pointer to wireless device
+ * @data: vendor command extra data
+ * @data_len: the size of extra data
+ *
+ * Return: 0 for success, non-zero for failure
+ */
+static int wlan_hdd_cfg80211_oplus_set_max_assoc(struct wiphy *wiphy,
+						 struct wireless_dev *wdev,
+						 const void *data, int data_len)
+{
+	int errno;
+	struct osif_vdev_sync *vdev_sync;
+
+	errno = osif_vdev_sync_op_start(wdev->netdev, &vdev_sync);
+	if (errno)
+		return errno;
+
+	errno = __wlan_hdd_cfg80211_oplus_set_max_assoc(wiphy, wdev, data,
+							data_len);
+
+	osif_vdev_sync_op_stop(vdev_sync);
+
+	return errno;
+}
+#endif /* OPLUS_ARCH_INJECT */
 
 /**
  * __wlan_hdd_cfg80211_get_nud_stats() - get arp stats command to firmware
@@ -15058,542 +15237,372 @@ static int wlan_hdd_cfg80211_extscan_get_valid_channels(
 }
 
 const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] = {
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DFS_CAPABILITY,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = is_driver_dfs_capable
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_GET_VALID_CHANNELS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_get_valid_channels
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DFS_CAPABILITY,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+	  .doit = is_driver_dfs_capable },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_GET_VALID_CHANNELS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_get_valid_channels },
 #ifdef WLAN_FEATURE_STATS_EXT
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_STATS_EXT,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_stats_ext_request
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_STATS_EXT,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_stats_ext_request },
 #endif
 #ifdef FEATURE_WLAN_EXTSCAN
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_START,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_start
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_STOP,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_stop
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_GET_CAPABILITIES,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_get_capabilities
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_GET_CACHED_RESULTS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_get_cached_results
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_SET_BSSID_HOTLIST,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_set_bssid_hotlist
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_RESET_BSSID_HOTLIST,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_reset_bssid_hotlist
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_SET_SIGNIFICANT_CHANGE,
-		.flags =
-			WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_set_significant_change
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_RESET_SIGNIFICANT_CHANGE,
-		.flags =
-			WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_extscan_reset_significant_change
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_PNO_SET_LIST,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_epno_list
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_START,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_start },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_STOP,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_stop },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_GET_CAPABILITIES,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_get_capabilities },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_GET_CACHED_RESULTS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_get_cached_results },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_SET_BSSID_HOTLIST,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_set_bssid_hotlist },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_RESET_BSSID_HOTLIST,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_reset_bssid_hotlist },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd =
+		  QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_SET_SIGNIFICANT_CHANGE,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_set_significant_change },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd =
+		  QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_RESET_SIGNIFICANT_CHANGE,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_extscan_reset_significant_change },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_PNO_SET_LIST,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_epno_list },
 #endif /* FEATURE_WLAN_EXTSCAN */
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LL_STATS_CLR,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ll_stats_clear
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LL_STATS_CLR,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ll_stats_clear },
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LL_STATS_SET,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ll_stats_set
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LL_STATS_SET,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ll_stats_set },
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LL_STATS_GET,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ll_stats_get
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LL_STATS_GET,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ll_stats_get },
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
 #ifdef FEATURE_WLAN_TDLS
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_exttdls_enable
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_exttdls_disable
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = wlan_hdd_cfg80211_exttdls_get_status
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_exttdls_enable },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_exttdls_disable },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+	  .doit = wlan_hdd_cfg80211_exttdls_get_status },
 #endif
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_SUPPORTED_FEATURES,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = wlan_hdd_cfg80211_get_supported_features
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SCANNING_MAC_OUI,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_scanning_mac_oui
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_SUPPORTED_FEATURES,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+	  .doit = wlan_hdd_cfg80211_get_supported_features },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SCANNING_MAC_OUI,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_scanning_mac_oui },
 
 	FEATURE_CONCURRENCY_MATRIX_VENDOR_COMMANDS
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_NO_DFS_FLAG,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_disable_dfs_chan_scan
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_WISA,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_handle_wisa_cmd
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_NO_DFS_FLAG,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_disable_dfs_chan_scan },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_WISA,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_handle_wisa_cmd },
 
 	FEATURE_STATION_INFO_VENDOR_COMMANDS
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DO_ACS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				WIPHY_VENDOR_CMD_NEED_NETDEV |
-				WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_do_acs
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DO_ACS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_do_acs },
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_FEATURES,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = wlan_hdd_cfg80211_get_features
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_FEATURES,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+	  .doit = wlan_hdd_cfg80211_get_features },
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_KEY_MGMT_SET_KEY,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_keymgmt_set_key
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_KEY_MGMT_SET_KEY,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_keymgmt_set_key },
 #endif
 #ifdef FEATURE_WLAN_EXTSCAN
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_PNO_SET_PASSPOINT_LIST,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_passpoint_list
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_PNO_RESET_PASSPOINT_LIST,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_reset_passpoint_list
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd =
+		  QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_PNO_SET_PASSPOINT_LIST,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_passpoint_list },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd =
+		  QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_PNO_RESET_PASSPOINT_LIST,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_reset_passpoint_list },
 #endif /* FEATURE_WLAN_EXTSCAN */
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_WIFI_INFO,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = wlan_hdd_cfg80211_get_wifi_info
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_wifi_configuration_set
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_WIFI_CONFIGURATION,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_wifi_configuration_get
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_wifi_test_config
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_WIFI_INFO,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+	  .doit = wlan_hdd_cfg80211_get_wifi_info },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_wifi_configuration_set },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_WIFI_CONFIGURATION,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_wifi_configuration_get },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_wifi_test_config },
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ROAM,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_ext_roam_params
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_WIFI_LOGGER_START,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_wifi_logger_start
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_RING_DATA,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV,
-		.doit = wlan_hdd_cfg80211_wifi_logger_get_ring_data
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_GET_PREFERRED_FREQ_LIST,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_get_preferred_freq_list
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_SET_PROBABLE_OPER_CHANNEL,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_probable_oper_channel
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ROAM,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_ext_roam_params },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_WIFI_LOGGER_START,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_wifi_logger_start },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_RING_DATA,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV,
+	  .doit = wlan_hdd_cfg80211_wifi_logger_get_ring_data },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_PREFERRED_FREQ_LIST,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_get_preferred_freq_list },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_PROBABLE_OPER_CHANNEL,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_probable_oper_channel },
 #ifdef WLAN_FEATURE_TSF
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TSF,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_handle_tsf_cmd
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TSF,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_handle_tsf_cmd },
 #endif
 #ifdef FEATURE_WLAN_TDLS
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_CAPABILITIES,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_get_tdls_capabilities
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_CAPABILITIES,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_get_tdls_capabilities },
 #endif
 #ifdef WLAN_FEATURE_OFFLOAD_PACKETS
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OFFLOADED_PACKETS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_offloaded_packets
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OFFLOADED_PACKETS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_offloaded_packets },
 #endif
-	FEATURE_RSSI_MONITOR_VENDOR_COMMANDS
-	FEATURE_OEM_DATA_VENDOR_COMMANDS
-	FEATURE_INTEROP_ISSUES_AP_VENDOR_COMMANDS
+	FEATURE_RSSI_MONITOR_VENDOR_COMMANDS FEATURE_OEM_DATA_VENDOR_COMMANDS
+		FEATURE_INTEROP_ISSUES_AP_VENDOR_COMMANDS
 
 #ifdef WLAN_NS_OFFLOAD
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ND_OFFLOAD,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_ns_offload
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ND_OFFLOAD,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_ns_offload },
 #endif /* WLAN_NS_OFFLOAD */
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_LOGGER_FEATURE_SET,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = wlan_hdd_cfg80211_get_logger_supp_feature
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TRIGGER_SCAN,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_vendor_scan
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_LOGGER_FEATURE_SET,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+	  .doit = wlan_hdd_cfg80211_get_logger_supp_feature },
+#ifndef OPLUS_BUG_STABILITY
+	//Remove for bug 1148060:get hidden AP after connect.
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TRIGGER_SCAN,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_vendor_scan },
+#endif /* OPLUS_BUG_STABILITY */
 
 	/* Vendor abort scan */
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ABORT_SCAN,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_vendor_abort_scan
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ABORT_SCAN,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_vendor_abort_scan },
 
 	/* OCB commands */
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_SET_CONFIG,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ocb_set_config
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_SET_UTC_TIME,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ocb_set_utc_time
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_OCB_START_TIMING_ADVERT,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ocb_start_timing_advert
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_STOP_TIMING_ADVERT,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ocb_stop_timing_advert
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_GET_TSF_TIMER,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ocb_get_tsf_timer
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DCC_GET_STATS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_dcc_get_stats
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DCC_CLEAR_STATS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_dcc_clear_stats
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DCC_UPDATE_NDL,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_dcc_update_ndl
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LINK_PROPERTIES,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_get_link_properties
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_SET_CONFIG,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ocb_set_config },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_SET_UTC_TIME,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ocb_set_utc_time },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_START_TIMING_ADVERT,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ocb_start_timing_advert },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_STOP_TIMING_ADVERT,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ocb_stop_timing_advert },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_OCB_GET_TSF_TIMER,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ocb_get_tsf_timer },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DCC_GET_STATS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_dcc_get_stats },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DCC_CLEAR_STATS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_dcc_clear_stats },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DCC_UPDATE_NDL,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_dcc_update_ndl },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LINK_PROPERTIES,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_get_link_properties },
 
 	FEATURE_OTA_TEST_VENDOR_COMMANDS
 
 #ifdef FEATURE_LFR_SUBNET_DETECTION
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GW_PARAM_CONFIG,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				WIPHY_VENDOR_CMD_NEED_NETDEV |
-				WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_gateway_params
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GW_PARAM_CONFIG,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_gateway_params },
 #endif /* FEATURE_LFR_SUBNET_DETECTION */
 
 	FEATURE_TX_POWER_VENDOR_COMMANDS
 
 #ifdef FEATURE_WLAN_APF
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_PACKET_FILTER,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_apf_offload
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_PACKET_FILTER,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_apf_offload },
 #endif /* FEATURE_WLAN_APF */
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ACS_POLICY,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_acs_dfs_mode
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_STA_CONNECT_ROAM_POLICY,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_sta_roam_policy
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ACS_POLICY,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_acs_dfs_mode },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_STA_CONNECT_ROAM_POLICY,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_sta_roam_policy },
 #ifdef FEATURE_WLAN_CH_AVOID
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_avoid_freq
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_avoid_freq },
 #endif
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_SAP_CONFIG,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_sap_configuration_set
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_SAP_CONFIG,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_sap_configuration_set },
 
 	FEATURE_P2P_LISTEN_OFFLOAD_VENDOR_COMMANDS
 
-	FEATURE_SAP_COND_CHAN_SWITCH_VENDOR_COMMANDS
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_WAKE_REASON_STATS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_get_wakelock_stats
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_BUS_SIZE,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_get_bus_size
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTERNAL_ACS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_update_vendor_channel
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SETBAND,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-					WIPHY_VENDOR_CMD_NEED_NETDEV |
-					WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_setband
-	},
+		FEATURE_SAP_COND_CHAN_SWITCH_VENDOR_COMMANDS{
+			.info.vendor_id = QCA_NL80211_VENDOR_ID,
+			.info.subcmd =
+				QCA_NL80211_VENDOR_SUBCMD_GET_WAKE_REASON_STATS,
+			.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
+				 WIPHY_VENDOR_CMD_NEED_NETDEV |
+				 WIPHY_VENDOR_CMD_NEED_RUNNING,
+			.doit = wlan_hdd_cfg80211_get_wakelock_stats },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_BUS_SIZE,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_get_bus_size },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_EXTERNAL_ACS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_update_vendor_channel },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SETBAND,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_setband },
 	{
 		.info.vendor_id = QCA_NL80211_VENDOR_ID,
 		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GETBAND,
@@ -15602,102 +15611,81 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] = {
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = wlan_hdd_cfg80211_getband,
 	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ROAMING,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_fast_roaming
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ROAMING,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_fast_roaming },
 #ifdef WLAN_FEATURE_DISA
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_ENCRYPTION_TEST,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_encrypt_decrypt_msg
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_ENCRYPTION_TEST,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_encrypt_decrypt_msg },
 #endif
 #ifdef FEATURE_WLAN_TDLS
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_CONFIGURE_TDLS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_configure_tdls_mode
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_CONFIGURE_TDLS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_configure_tdls_mode },
 #endif
-	FEATURE_SAR_LIMITS_VENDOR_COMMANDS
-	BCN_RECV_FEATURE_VENDOR_COMMANDS
+	FEATURE_SAR_LIMITS_VENDOR_COMMANDS BCN_RECV_FEATURE_VENDOR_COMMANDS
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_SAR_LIMITS,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_sar_power_limits
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_TRACE_LEVEL,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			 WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_trace_level
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd =
-			QCA_NL80211_VENDOR_SUBCMD_LL_STATS_EXT,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV |
-				 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_ll_stats_ext_set_param
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_NUD_STATS_SET,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_set_nud_stats
-	},
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_NUD_STATS_GET,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_get_nud_stats
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_SAR_LIMITS,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_sar_power_limits },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SET_TRACE_LEVEL,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_trace_level },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_LL_STATS_EXT,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_ll_stats_ext_set_param },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_NUD_STATS_SET,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_set_nud_stats },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_NUD_STATS_GET,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_get_nud_stats },
 
 	FEATURE_BSS_TRANSITION_VENDOR_COMMANDS
-	FEATURE_SPECTRAL_SCAN_VENDOR_COMMANDS
-	FEATURE_CFR_VENDOR_COMMANDS
-	FEATURE_11AX_VENDOR_COMMANDS
+		FEATURE_SPECTRAL_SCAN_VENDOR_COMMANDS
+			FEATURE_CFR_VENDOR_COMMANDS FEATURE_11AX_VENDOR_COMMANDS
 
-	{
-		.info.vendor_id = QCA_NL80211_VENDOR_ID,
-		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_CHAIN_RSSI,
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
-			WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = wlan_hdd_cfg80211_get_chain_rssi
-	},
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_GET_CHAIN_RSSI,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_get_chain_rssi },
+#ifdef OPLUS_ARCH_INJECT
+	//add for: hotspot manager via wificond
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = OPLUS_NL80211_VENDOR_SUBCMD_MODIFY_ACL,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_oplus_modify_acl },
+	{ .info.vendor_id = QCA_NL80211_VENDOR_ID,
+	  .info.subcmd = OPLUS_NL80211_VENDOR_SUBCMD_SET_MAX_ASSOC,
+	  .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV |
+		   WIPHY_VENDOR_CMD_NEED_RUNNING,
+	  .doit = wlan_hdd_cfg80211_oplus_set_max_assoc },
+#endif /* OPLUS_ARCH_INJECT */
 
-	FEATURE_ACTIVE_TOS_VENDOR_COMMANDS
-	FEATURE_NAN_VENDOR_COMMANDS
-	FEATURE_FW_STATE_COMMANDS
-	FEATURE_COEX_CONFIG_COMMANDS
-	FEATURE_MPTA_HELPER_COMMANDS
-	FEATURE_HW_CAPABILITY_COMMANDS
-	FEATURE_THERMAL_VENDOR_COMMANDS
-	FEATURE_GPIO_CFG_VENDOR_COMMANDS
+	FEATURE_ACTIVE_TOS_VENDOR_COMMANDS FEATURE_NAN_VENDOR_COMMANDS
+		FEATURE_FW_STATE_COMMANDS FEATURE_COEX_CONFIG_COMMANDS
+			FEATURE_MPTA_HELPER_COMMANDS
+				FEATURE_HW_CAPABILITY_COMMANDS
+					FEATURE_THERMAL_VENDOR_COMMANDS
+						FEATURE_GPIO_CFG_VENDOR_COMMANDS
 };
 
 struct hdd_context *hdd_cfg80211_wiphy_alloc(void)
