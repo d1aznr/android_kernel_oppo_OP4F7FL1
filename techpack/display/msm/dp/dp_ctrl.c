@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/types.h>
@@ -723,8 +723,10 @@ static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow)
 			break;
 		}
 
-		if (!link_train_max_retries || atomic_read(&ctrl->aborted))
+		if (!link_train_max_retries || atomic_read(&ctrl->aborted)) {
+			dp_ctrl_disable_link_clock(ctrl);
 			break;
+		}
 
 		if (rc != -EAGAIN)
 			dp_ctrl_link_rate_down_shift(ctrl);
@@ -994,14 +996,15 @@ static void dp_ctrl_mst_calculate_rg(struct dp_ctrl_private *ctrl,
 	u64 raw_target_sc, target_sc_fixp;
 	u64 ts_denom, ts_enum, ts_int;
 	u64 pclk = panel->pinfo.pixel_clk_khz;
-	u64 lclk = panel->link_info.rate;
-	u64 lanes = panel->link_info.num_lanes;
+	u64 lclk = 0;
+	u64 lanes = ctrl->link->link_params.lane_count;
 	u64 bpp = panel->pinfo.bpp;
 	u64 pbn = panel->pbn;
 	u64 numerator, denominator, temp, temp1, temp2;
 	u32 x_int = 0, y_frac_enum = 0;
 	u64 target_strm_sym, ts_int_fixp, ts_frac_fixp, y_frac_enum_fixp;
 
+	lclk = drm_dp_bw_code_to_link_rate(ctrl->link->link_params.bw_code);
 	if (panel->pinfo.comp_info.comp_ratio)
 		bpp = panel->pinfo.comp_info.dsc_info.bpp;
 
@@ -1139,32 +1142,16 @@ static void dp_ctrl_fec_dsc_setup(struct dp_ctrl_private *ctrl)
 	u8 fec_sts = 0;
 	int rlen;
 	u32 dsc_enable;
-	int i, max_retries = 3;
-	bool fec_en_detected = false;
 
 	if (!ctrl->fec_mode)
 		return;
 
-	/* Need to try to enable multiple times due to BS symbols collisions */
-	for (i = 0; i < max_retries; i++) {
-		ctrl->catalog->fec_config(ctrl->catalog, ctrl->fec_mode);
+	ctrl->catalog->fec_config(ctrl->catalog, ctrl->fec_mode);
 
-		/* wait for controller to start fec sequence */
-		usleep_range(900, 1000);
-
-		/* read back FEC status and check if it is enabled */
-		drm_dp_dpcd_readb(ctrl->aux->drm_aux, DP_FEC_STATUS, &fec_sts);
-		if (fec_sts & DP_FEC_DECODE_EN_DETECTED) {
-			fec_en_detected = true;
-			break;
-		}
-	}
-
-	SDE_EVT32_EXTERNAL(i, fec_en_detected);
-	DP_DEBUG("retries %d, fec_en_detected %d\n", i, fec_en_detected);
-
-	if (!fec_en_detected)
-		DP_WARN("failed to enable sink fec\n");
+	/* wait for controller to start fec sequence */
+	usleep_range(900, 1000);
+	drm_dp_dpcd_readb(ctrl->aux->drm_aux, DP_FEC_STATUS, &fec_sts);
+	DP_DEBUG("sink fec status:%d\n", fec_sts);
 
 	dsc_enable = ctrl->dsc_mode ? 1 : 0;
 	rlen = drm_dp_dpcd_writeb(ctrl->aux->drm_aux, DP_DSC_ENABLE,
@@ -1183,6 +1170,11 @@ static int dp_ctrl_stream_on(struct dp_ctrl *dp_ctrl, struct dp_panel *panel)
 		return -EINVAL;
 
 	ctrl = container_of(dp_ctrl, struct dp_ctrl_private, dp_ctrl);
+
+	if (!ctrl->power_on) {
+		DP_ERR("ctrl off\n");
+		return -EINVAL;
+	}
 
 	rc = dp_ctrl_enable_stream_clocks(ctrl, panel);
 	if (rc) {
@@ -1330,7 +1322,8 @@ static int dp_ctrl_on(struct dp_ctrl *dp_ctrl, bool mst_mode,
 	ctrl->initial_bw_code = ctrl->link->link_params.bw_code;
 
 	rc = dp_ctrl_link_setup(ctrl, shallow);
-	ctrl->power_on = true;
+	if (!rc)
+		ctrl->power_on = true;
 end:
 	return rc;
 }
@@ -1349,7 +1342,7 @@ static void dp_ctrl_off(struct dp_ctrl *dp_ctrl)
 
 	ctrl->catalog->fec_config(ctrl->catalog, false);
 	dp_ctrl_configure_source_link_params(ctrl, false);
-	ctrl->catalog->reset(ctrl->catalog);
+	dp_ctrl_state_ctrl(ctrl, 0);
 
 	/* Make sure DP is disabled before clk disable */
 	wmb();

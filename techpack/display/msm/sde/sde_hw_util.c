@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 #define pr_fmt(fmt)	"[drm:%s:%d] " fmt, __func__, __LINE__
 
@@ -76,7 +76,10 @@ void sde_reg_write(struct sde_hw_blk_reg_map *c,
 	if (c->log_mask & sde_hw_util_log_mask)
 		SDE_DEBUG_DRIVER("[%s:0x%X] <= 0x%X\n",
 				name, c->blk_off + reg_off, val);
+	SDE_EVT32_REGWRITE(c->blk_off, reg_off, val);
 	writel_relaxed(val, c->base_off + c->blk_off + reg_off);
+	SDE_REG_LOG(c->log_mask ? ilog2(c->log_mask)+1 : 0,
+			val, c->blk_off + reg_off);
 }
 
 int sde_reg_read(struct sde_hw_blk_reg_map *c, u32 reg_off)
@@ -141,6 +144,7 @@ void sde_set_scaler_v2(struct sde_hw_scaler3_cfg *cfg,
 	cfg->dyn_exp_disabled = (scale_v2->flags & SDE_DYN_EXP_DISABLE) ? 1 : 0;
 
 	cfg->de.enable = scale_v2->de.enable;
+
 	cfg->de.sharpen_level1 = scale_v2->de.sharpen_level1;
 	cfg->de.sharpen_level2 = scale_v2->de.sharpen_level2;
 	cfg->de.clip = scale_v2->de.clip;
@@ -352,7 +356,7 @@ void sde_hw_setup_scaler3(struct sde_hw_blk_reg_map *c,
 	u32 phase_init, preload, src_y_rgb, src_uv, dst;
 	scaler_lut_type setup_lut = NULL;
 
-	if (!scaler3_cfg->enable || SDE_FORMAT_IS_FSC(format))
+	if (!scaler3_cfg->enable)
 		goto end;
 
 	op_mode |= BIT(0);
@@ -433,7 +437,7 @@ end:
 	if (format && !SDE_FORMAT_IS_DX(format))
 		op_mode |= BIT(14);
 
-	if (format && format->alpha_enable && (!SDE_FORMAT_IS_FSC(format))) {
+	if (format && format->alpha_enable) {
 		op_mode |= BIT(10);
 		if (scaler_version == 0x1002)
 			op_mode |= (scaler3_cfg->alpha_filter_cfg & 0x1) << 30;
@@ -549,9 +553,10 @@ uint32_t sde_copy_formats(
 /**
  * sde_get_linetime   - returns the line time for a given mode
  * @mode:          pointer to drm mode to calculate the line time
+ * @comp_ratio:    compression ratio
  * Return:         line time of display mode in nS
  */
-uint32_t sde_get_linetime(struct drm_display_mode *mode)
+uint32_t sde_get_linetime(struct drm_display_mode *mode, int comp_ratio)
 {
 	u64 pclk_rate;
 	u32 pclk_period;
@@ -570,10 +575,11 @@ uint32_t sde_get_linetime(struct drm_display_mode *mode)
 	}
 
 	/*
-	 * Line time calculation based on Pixel clock and HTOTAL.
+	 * Line time calculation based on Pixel clock, HTOTAL, and comp_ratio.
 	 * Final unit is in ns.
 	 */
-	line_time = (pclk_period * mode->htotal) / 1000;
+	line_time = DIV_ROUND_UP(mult_frac(pclk_period, mode->htotal,
+			comp_ratio), 1000);
 	if (line_time == 0) {
 		SDE_ERROR("line time calculation is 0\n");
 		return 0;

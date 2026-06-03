@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2019, 2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _SDE_HW_MDSS_H
@@ -37,24 +37,20 @@
 #endif
 
 #define MAX_DSI_DISPLAYS		2
-#define MAX_DATA_PATH_PER_DSIPLAY	4
+#define MAX_DATA_PATH_PER_DSIPLAY	2
 
 enum sde_format_flags {
 	SDE_FORMAT_FLAG_YUV_BIT,
 	SDE_FORMAT_FLAG_DX_BIT,
 	SDE_FORMAT_FLAG_COMPRESSED_BIT,
-	SDE_FORMAT_FLAG_FSC_BIT,
 	SDE_FORMAT_FLAG_BIT_MAX,
 };
 
 #define SDE_FORMAT_FLAG_YUV		BIT(SDE_FORMAT_FLAG_YUV_BIT)
 #define SDE_FORMAT_FLAG_DX		BIT(SDE_FORMAT_FLAG_DX_BIT)
 #define SDE_FORMAT_FLAG_COMPRESSED	BIT(SDE_FORMAT_FLAG_COMPRESSED_BIT)
-#define SDE_FORMAT_FLAG_FSC		BIT(SDE_FORMAT_FLAG_FSC_BIT)
 #define SDE_FORMAT_IS_YUV(X)		\
 	(test_bit(SDE_FORMAT_FLAG_YUV_BIT, (X)->flag))
-#define SDE_FORMAT_IS_FSC(X)		\
-	(test_bit(SDE_FORMAT_FLAG_FSC_BIT, (X)->flag))
 #define SDE_FORMAT_IS_DX(X)		\
 	(test_bit(SDE_FORMAT_FLAG_DX_BIT, (X)->flag))
 #define SDE_FORMAT_IS_LINEAR(X)		((X)->fetch_mode == SDE_FETCH_LINEAR)
@@ -175,6 +171,7 @@ enum sde_stage {
 	SDE_STAGE_10,
 	SDE_STAGE_MAX
 };
+
 enum sde_dspp {
 	DSPP_0 = 1,
 	DSPP_1,
@@ -187,6 +184,12 @@ enum sde_ltm {
 	LTM_0 = DSPP_0,
 	LTM_1,
 	LTM_MAX
+};
+
+enum sde_rc {
+	RC_0 = DSPP_0,
+	RC_1,
+	RC_MAX
 };
 
 enum sde_ds {
@@ -410,21 +413,6 @@ enum sde_3d_blend_mode {
 	BLEND_3D_V_ROW_INT,
 	BLEND_3D_COL_INT,
 	BLEND_3D_MAX
-};
-
-/**
- * enum sde_layout
- * Describes SSPP to LM staging layout when using more than 1 pair of LMs
- * @SDE_LAYOUT_NONE    : SSPPs to LMs staging layout not enabled
- * @SDE_LAYOUT_LEFT    : SSPPs will be staged on left two LMs
- * @SDE_LAYOUT_RIGHT   : SSPPs will be staged on right two LMs
- * @SDE_LAYOUT_MAX     :
- */
-enum sde_layout {
-	SDE_LAYOUT_NONE = 0,
-	SDE_LAYOUT_LEFT,
-	SDE_LAYOUT_RIGHT,
-	SDE_LAYOUT_MAX,
 };
 
 /** struct sde_format - defines the format configuration which

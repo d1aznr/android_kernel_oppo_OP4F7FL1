@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __SDE_ENCODER_PHYS_H__
@@ -68,8 +68,6 @@ struct sde_encoder_phys;
  *	provides for the physical encoders to use to callback.
  * @handle_vblank_virt:	Notify virtual encoder of vblank IRQ reception
  *			Note: This is called from IRQ handler context.
- * @handle_lineptr_virt: Notify virtual encoder of lineptr IRQ reception
- *			Note: This is called from IRQ handler context.
  * @handle_underrun_virt: Notify virtual encoder of underrun IRQ reception
  *			Note: This is called from IRQ handler context.
  * @handle_frame_done:	Notify virtual encoder that this phys encoder
@@ -79,14 +77,12 @@ struct sde_encoder_phys;
 struct sde_encoder_virt_ops {
 	void (*handle_vblank_virt)(struct drm_encoder *parent,
 			struct sde_encoder_phys *phys);
-	void (*handle_lineptr_virt)(struct drm_encoder *parent,
-			struct sde_encoder_phys *phys,  ktime_t time);
 	void (*handle_underrun_virt)(struct drm_encoder *parent,
 			struct sde_encoder_phys *phys);
 	void (*handle_frame_done)(struct drm_encoder *parent,
 			struct sde_encoder_phys *phys, u32 event);
 	void (*get_qsync_fps)(struct drm_encoder *parent,
-			u32 *qsync_fps);
+			u32 *qsync_fps, u32 vrr_fps);
 };
 
 /**
@@ -110,7 +106,6 @@ struct sde_encoder_virt_ops {
  *				resources that this phys_enc is using.
  *				Expect no overlap between phys_encs.
  * @control_vblank_irq		Register/Deregister for VBLANK IRQ
- * @set_lineptr:	Writes lineptr value to register
  * @wait_for_commit_done:	Wait for hardware to have flushed the
  *				current pending frames to hardware
  * @wait_for_tx_complete:	Wait for hardware to transfer the pixels
@@ -163,8 +158,6 @@ struct sde_encoder_phys_ops {
 			struct sde_encoder_hw_resources *hw_res,
 			struct drm_connector_state *conn_state);
 	int (*control_vblank_irq)(struct sde_encoder_phys *enc, bool enable);
-	int (*set_lineptr)(struct sde_encoder_phys *phys_enc,
-			u32 lineptr);
 	int (*wait_for_commit_done)(struct sde_encoder_phys *phys_enc);
 	int (*wait_for_tx_complete)(struct sde_encoder_phys *phys_enc);
 	int (*wait_for_vblank)(struct sde_encoder_phys *phys_enc);
@@ -209,7 +202,6 @@ struct sde_encoder_phys_ops {
  * @INTR_IDX_AUTOREFRESH_DONE:  Autorefresh done for cmd mode panel meaning
  *                              autorefresh has triggered a double buffer flip
  * @INTR_IDX_WRPTR:    Writepointer start interrupt for cmd mode panel
- * @INTR_IDX_LINEPTR:  Lineptr interrupt for video mode panel
  */
 enum sde_intr_idx {
 	INTR_IDX_VSYNC,
@@ -225,7 +217,6 @@ enum sde_intr_idx {
 	INTR_IDX_PP4_OVFL,
 	INTR_IDX_PP5_OVFL,
 	INTR_IDX_WRPTR,
-	INTR_IDX_LINEPTR,
 	INTR_IDX_MAX,
 };
 
@@ -298,7 +289,6 @@ struct sde_encoder_irq {
  *				programming ROT and MDP fetch start
  * @frame_trigger_mode:		frame trigger mode indication for command
  *				mode display
- * @dsc_4hs_merge_en:		enable dsc 4hs merge.
  */
 struct sde_encoder_phys {
 	struct drm_encoder *parent;
@@ -340,7 +330,18 @@ struct sde_encoder_phys {
 	bool in_clone_mode;
 	int vfp_cached;
 	enum frame_trigger_mode_type frame_trigger_mode;
-	bool dsc_4hs_merge_en;
+
+#ifdef OPLUS_FEATURE_ADFR
+	//2 : transferring (wr_ptr_irq)
+	//1 : transfer finish (pp_tx_done_irq)
+	//0 : panel read finish (rd_ptr_irq)
+	//disable qsync or wait vblank to avoid tearing
+	atomic_t frame_state;
+	//threshold for current frame
+	u32 current_sync_threshold_start;
+	//threshold for current qsync mode
+	u32 qsync_sync_threshold_start;
+#endif
 };
 
 static inline int sde_encoder_phys_inc_pending(struct sde_encoder_phys *phys)
@@ -615,17 +616,30 @@ static inline enum sde_3d_blend_mode sde_encoder_helper_get_3d_blend_mode(
 	topology = sde_connector_get_topology_name(phys_enc->connector);
 	if (phys_enc->split_role == ENC_ROLE_SOLO &&
 			(topology == SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE ||
-			topology == SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE_DSC))
-		return BLEND_3D_H_ROW_INT;
-
-	if (((phys_enc->split_role == ENC_ROLE_MASTER) ||
-			(phys_enc->split_role == ENC_ROLE_SLAVE)) &&
-			((topology == SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE) ||
-			(topology == SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE_DSC) ||
-			(topology == SDE_RM_TOPOLOGY_QUADPIPE_DSC4HSMERGE)))
+			 topology == SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE_DSC))
 		return BLEND_3D_H_ROW_INT;
 
 	return BLEND_3D_NONE;
+}
+
+/**
+ * sde_encoder_phys_is_cwb_disabling - Check if CWB encoder attached to this
+ *	 CRTC and it is in SDE_ENC_DISABLING state.
+ * @phys_enc: Pointer to physical encoder structure
+ * @crtc: drm crtc
+ * @Return: true if cwb encoder is in disabling state
+ */
+static inline bool sde_encoder_phys_is_cwb_disabling(
+	struct sde_encoder_phys *phys, struct drm_crtc *crtc)
+{
+	struct sde_encoder_phys_wb *wb_enc;
+
+	if (!phys || !phys->in_clone_mode ||
+				phys->enable_state != SDE_ENC_DISABLING)
+		return false;
+
+	wb_enc = container_of(phys, struct sde_encoder_phys_wb, base);
+	return (wb_enc->crtc == crtc) ? true : false;
 }
 
 /**
@@ -778,5 +792,7 @@ void sde_encoder_helper_setup_misr(struct sde_encoder_phys *phys_enc,
  */
 int sde_encoder_helper_collect_misr(struct sde_encoder_phys *phys_enc,
 		bool nonblock, u32 *misr_value);
+
+ktime_t sde_encoder_get_last_vsync_ts_cmd(struct sde_encoder_phys *phys_enc);
 
 #endif /* __sde_encoder_phys_H__ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -42,8 +42,6 @@
 #define MSM_MODE_FLAG_SEAMLESS_POMS			(1<<4)
 /* Request to switch the bit clk */
 #define MSM_MODE_FLAG_SEAMLESS_DYN_CLK			(1<<5)
-/* Indicates Field sequential color mode is enabled */
-#define MSM_MODE_FLAG_FSC_MODE				(1<<6)
 
 /* As there are different display controller blocks depending on the
  * snapdragon version, the kms support is split out and the appropriate
@@ -123,15 +121,14 @@ struct msm_kms_funcs {
 	/* handle continuous splash  */
 	int (*cont_splash_config)(struct msm_kms *kms);
 	/* check for continuous splash status */
-	bool (*check_for_splash)(struct msm_kms *kms);
-	/* topology lm information */
+	bool (*check_for_splash)(struct msm_kms *kms, struct drm_crtc *crtc);
+	/* topology information */
 	int (*get_mixer_count)(const struct msm_kms *kms,
 			const struct drm_display_mode *mode,
 			const struct msm_resource_caps_info *res, u32 *num_lm);
-	/* topology dsc information */
-	int (*get_dsc_count)(const struct msm_kms *kms,
-			u32 hdisplay, u32 *num_dsc);
-
+#if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(CONFIG_PXLW_SOFT_IRIS)
+	int (*iris_operate)(struct msm_kms *kms, u32 operate_type, struct msm_iris_operate_value *operate_value);
+#endif
 };
 
 struct msm_kms {
@@ -218,11 +215,6 @@ static inline bool msm_is_mode_dynamic_fps(const struct drm_display_mode *mode)
 {
 	return ((mode->flags & DRM_MODE_FLAG_SEAMLESS) &&
 		(mode->private_flags & MSM_MODE_FLAG_SEAMLESS_DYNAMIC_FPS));
-}
-
-static inline bool msm_is_mode_fsc(const struct drm_display_mode *mode)
-{
-	return (mode->private_flags & MSM_MODE_FLAG_FSC_MODE);
 }
 
 static inline bool msm_is_mode_seamless_vrr(const struct drm_display_mode *mode)

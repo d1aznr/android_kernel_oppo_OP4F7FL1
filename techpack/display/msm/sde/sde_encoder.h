@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -26,7 +26,7 @@
 #include "sde_kms.h"
 #include "sde_connector.h"
 
-#define MAX_CHANNELS_PER_ENC 4
+#define MAX_CHANNELS_PER_ENC 2
 
 #define SDE_ENCODER_FRAME_EVENT_DONE			BIT(0)
 #define SDE_ENCODER_FRAME_EVENT_ERROR			BIT(1)
@@ -63,13 +63,11 @@ struct sde_encoder_hw_resources {
  *                      the bounds of the physical display at the bit index
  * @recovery_events_enabled: indicates status of client for recoovery events
  * @frame_trigger_mode: indicates frame trigger mode
- * @num_channels: number of compression encoders
  */
 struct sde_encoder_kickoff_params {
 	unsigned long affected_displays;
 	bool recovery_events_enabled;
 	enum frame_trigger_mode_type frame_trigger_mode;
-	u32 num_channels;
 };
 
 /**
@@ -131,26 +129,6 @@ struct sde_rsc_client *sde_encoder_get_rsc_client(struct drm_encoder *encoder);
  * @Returns:	zero on success
  */
 int sde_encoder_poll_line_counts(struct drm_encoder *encoder);
-
-/**
- * sde_encoder_set_lineptr_value - Configure the line value where the interrupt
- *	needs to be triggered.
- * @encoder:	encoder pointer
- * line_value:	lineptr value user requested
- * #enable:	true if in commit context
- * Returns: 0 on success, errorcode otherwise
-  */
-int sde_encoder_set_lineptr_value(struct drm_encoder *encoder,
-		u32 line_value, bool enable);
-
-/**
- * sde_encoder_register_lineptr_callback - provide callback to encoder that
- *	will be called on the next lineptr.
- * @encoder:	encoder pointer
- * @cb:		callback pointer, provide NULL to deregister
- */
-void sde_encoder_register_lineptr_callback(struct drm_encoder *encoder,
-	      void (*cb)(void *, ktime_t));
 
 /**
  * sde_encoder_prepare_for_kickoff - schedule double buffer flip of the ctl
@@ -335,6 +313,15 @@ void sde_encoder_recovery_events_handler(struct drm_encoder *encoder,
  */
 bool sde_encoder_in_clone_mode(struct drm_encoder *enc);
 
+/*
+ * sde_encoder_is_cwb_disabling - check if cwb encoder disable is pending
+ * @drm_enc:    Pointer to drm encoder structure
+ * @drm_crtc:    Pointer to drm crtc structure
+ * @Return: true if cwb encoder disable is pending
+ */
+bool sde_encoder_is_cwb_disabling(struct drm_encoder *drm_enc,
+	struct drm_crtc *drm_crtc);
+
 /**
  * sde_encoder_is_primary_display - checks if underlying display is primary
  *     display or not.
@@ -377,5 +364,45 @@ void sde_encoder_needs_hw_reset(struct drm_encoder *enc);
  * @enable:	enable/disable flag
  */
 void sde_encoder_uidle_enable(struct drm_encoder *drm_enc, bool enable);
+
+#if defined(OPLUS_FEATURE_PXLW_IRIS5)
+void sde_encoder_rc_lock(struct drm_encoder *drm_enc);
+void sde_encoder_rc_unlock(struct drm_encoder *drm_enc);
+void sde_encoder_disable_autorefresh_handler(struct drm_encoder *drm_enc);
+bool sde_encoder_is_disabled(struct drm_encoder *drm_enc);
+#endif
+/**
+ * sde_encoder_virt_reset - delay encoder virt reset
+ * @drm_enc:	Pointer to drm encoder structure
+ */
+void sde_encoder_virt_reset(struct drm_encoder *drm_enc);
+
+#if defined(OPLUS_FEATURE_PXLW_IRIS5)
+void sde_encoder_rc_lock(struct drm_encoder *drm_enc);
+void sde_encoder_rc_unlock(struct drm_encoder *drm_enc);
+void sde_encoder_disable_autorefresh_handler(struct drm_encoder *drm_enc);
+bool sde_encoder_is_disabled(struct drm_encoder *drm_enc);
+#endif
+
+/**
+ * sde_encoder_get_kms - retrieve the kms from encoder
+ * @drm_enc:    Pointer to drm encoder structure
+ */
+static inline struct sde_kms *sde_encoder_get_kms(struct drm_encoder *drm_enc)
+{
+	struct msm_drm_private *priv;
+
+	if (!drm_enc || !drm_enc->dev) {
+		SDE_ERROR("invalid encoder\n");
+		return NULL;
+	}
+	priv = drm_enc->dev->dev_private;
+	if (!priv || !priv->kms) {
+		SDE_ERROR("invalid kms\n");
+		return NULL;
+	}
+
+	return to_sde_kms(priv->kms);
+}
 
 #endif /* __SDE_ENCODER_H__ */

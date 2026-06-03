@@ -55,6 +55,8 @@
 #define SDE_HW_VER_610	SDE_HW_VER(6, 1, 0) /* sm7250 */
 #define SDE_HW_VER_630	SDE_HW_VER(6, 3, 0) /* bengal */
 #define SDE_HW_VER_640	SDE_HW_VER(6, 4, 0) /* lagoon */
+#define SDE_HW_VER_650	SDE_HW_VER(6, 5, 0) /* scuba */
+#define SDE_HW_VER_6100	SDE_HW_VER(6, 10, 0) /* khaje */
 
 #define IS_MSM8996_TARGET(rev) IS_SDE_MAJOR_MINOR_SAME((rev), SDE_HW_VER_170)
 #define IS_MSM8998_TARGET(rev) IS_SDE_MAJOR_MINOR_SAME((rev), SDE_HW_VER_300)
@@ -69,6 +71,8 @@
 #define IS_SAIPAN_TARGET(rev) IS_SDE_MAJOR_MINOR_SAME((rev), SDE_HW_VER_610)
 #define IS_BENGAL_TARGET(rev) IS_SDE_MAJOR_MINOR_SAME((rev), SDE_HW_VER_630)
 #define IS_LAGOON_TARGET(rev) IS_SDE_MAJOR_MINOR_SAME((rev), SDE_HW_VER_640)
+#define IS_SCUBA_TARGET(rev) IS_SDE_MAJOR_MINOR_SAME((rev), SDE_HW_VER_650)
+#define IS_KHAJE_TARGET(rev) IS_SDE_MAJOR_MINOR_SAME((rev), SDE_HW_VER_6100)
 
 #define SDE_HW_BLK_NAME_LEN	16
 
@@ -76,11 +80,6 @@
 #define MAX_IMG_HEIGHT 0x3fff
 
 #define CRTC_DUAL_MIXERS	2
-#define CRTC_QUAD_MIXERS	4
-#define CRTC_DUAL_MIXERS_ONLY	2
-#define MAX_MIXERS_PER_CRTC	4
-#define MAX_MIXERS_PER_LAYOUT	2
-#define MAX_LAYOUTS_PER_CRTC (MAX_MIXERS_PER_CRTC / MAX_MIXERS_PER_LAYOUT)
 
 #define SDE_COLOR_PROCESS_VER(MAJOR, MINOR) \
 		((((MAJOR) & 0xFFFF) << 16) | (((MINOR) & 0xFFFF)))
@@ -93,7 +92,7 @@
 
 #define SDE_CTL_CFG_VERSION_1_0_0       0x100
 #define MAX_INTF_PER_CTL_V1                 2
-#define MAX_DSC_PER_CTL_V1                  4
+#define MAX_DSC_PER_CTL_V1                  2
 #define MAX_CWB_PER_CTL_V1                  2
 #define MAX_MERGE_3D_PER_CTL_V1             2
 #define MAX_WB_PER_CTL_V1                   1
@@ -316,6 +315,7 @@ enum {
  * @SDE_DSPP_VLUT            PA VLUT block
  * @SDE_DSPP_AD              AD block
  * @SDE_DSPP_LTM             LTM block
+ * @SDE_DSPP_RC              RC block
  * @SDE_DSPP_MAX             maximum value
  */
 enum {
@@ -331,6 +331,7 @@ enum {
 	SDE_DSPP_VLUT,
 	SDE_DSPP_AD,
 	SDE_DSPP_LTM,
+	SDE_DSPP_RC,
 	SDE_DSPP_MAX
 };
 
@@ -604,8 +605,10 @@ enum sde_qos_lut_usage {
  * @in_rot_maxdwnscale_rt_denom: max downscale ratio for inline rotation
  *                                 rt clients - denominator
  * @in_rot_maxdwnscale_nrt: max downscale ratio for inline rotation nrt clients
- * @in_rot_minpredwnscale_num: min downscale ratio to enable pre-downscale
- * @in_rot_minpredwnscale_denom: min downscale ratio to enable pre-downscale
+ * @in_rot_maxdwnscale_rt_nopd_num: downscale threshold for when pre-downscale
+ *                                    must be enabled on HW with this support.
+ * @in_rot_maxdwnscale_rt_nopd_denom: downscale threshold for when pre-downscale
+ *                                    must be enabled on HW with this support.
  * @in_rot_maxheight: max pre rotated height for inline rotation
  * @llcc_scid: scid for the system cache
  * @llcc_slice size: slice size of the system cache
@@ -642,8 +645,8 @@ struct sde_sspp_sub_blks {
 	u32 in_rot_maxdwnscale_rt_num;
 	u32 in_rot_maxdwnscale_rt_denom;
 	u32 in_rot_maxdwnscale_nrt;
-	u32 in_rot_minpredwnscale_num;
-	u32 in_rot_minpredwnscale_denom;
+	u32 in_rot_maxdwnscale_rt_nopd_num;
+	u32 in_rot_maxdwnscale_rt_nopd_denom;
 	u32 in_rot_maxheight;
 	int llcc_scid;
 	size_t llcc_slice_size;
@@ -663,6 +666,20 @@ struct sde_lm_sub_blks {
 	struct sde_pp_blk gc;
 };
 
+/**
+ * struct sde_dspp_rc: Pixel processing rounded corner sub-blk information
+ * @info: HW register and features supported by this sub-blk.
+ * @version: HW Algorithm version.
+ * @idx: HW block instance id.
+ * @mem_total_size: data memory size.
+ */
+struct sde_dspp_rc {
+	SDE_HW_SUBBLK_INFO;
+	u32 version;
+	u32 idx;
+	u32 mem_total_size;
+};
+
 struct sde_dspp_sub_blks {
 	struct sde_pp_blk igc;
 	struct sde_pp_blk pcc;
@@ -676,6 +693,7 @@ struct sde_dspp_sub_blks {
 	struct sde_pp_blk ad;
 	struct sde_pp_blk ltm;
 	struct sde_pp_blk vlut;
+	struct sde_dspp_rc rc;
 };
 
 struct sde_pingpong_sub_blks {
@@ -1145,6 +1163,7 @@ struct sde_sc_cfg {
  * @cdp_cfg            cdp use case configurations
  * @cpu_mask:          pm_qos cpu mask value
  * @cpu_dma_latency:   pm_qos cpu dma latency value
+ * @cpu_irq_latency:   pm_qos cpu irq latency value
  * @axi_bus_width:     axi bus width value in bytes
  * @num_mnoc_ports:    number of mnoc ports
  */
@@ -1175,6 +1194,7 @@ struct sde_perf_cfg {
 	struct sde_perf_cdp_cfg cdp_cfg[SDE_PERF_CDP_USAGE_MAX];
 	u32 cpu_mask;
 	u32 cpu_dma_latency;
+	u32 cpu_irq_latency;
 	u32 axi_bus_width;
 	u32 num_mnoc_ports;
 };
@@ -1228,12 +1248,12 @@ struct sde_limit_cfg {
  * @scaling_linewidth max vig source pipe linewidth for scaling usecases
  * @inline_linewidth max source pipe linewidth for inline rotation
  * @max_mixer_width    max layer mixer line width support.
- * @max_dsc_width      max dsc line width support.
  * @max_mixer_blendstages max layer mixer blend stages or
  *                       supported z order
  * @max_wb_linewidth   max writeback line width support.
  * @max_display_width   maximum display width support.
  * @max_display_height  maximum display height support.
+ * @max_lm_per_display  maximum layer mixer per display
  * @min_display_width   minimum display width support.
  * @min_display_height  minimum display height support.
  * @qseed_type         qseed2 or qseed3 support.
@@ -1266,6 +1286,9 @@ struct sde_limit_cfg {
  * @update_tcsr_disp_glitch  flag to enable HW workaround to avoid spurious
  *                            transactions during suspend
  * @has_base_layer     Supports staging layer as base layer
+ * @allow_gdsc_toggle  Flag to check if gdsc toggle is needed after crtc is
+ *                           disabled when external vote is present
+ * @rc_lm_flush_override        Support Rounded Corner using layer mixer flush
  * @sc_cfg: system cache configuration
  * @uidle_cfg		Settings for uidle feature
  * @sui_misr_supported  indicate if secure-ui-misr is supported
@@ -1282,6 +1305,7 @@ struct sde_limit_cfg {
  * @has_vig_p010  indicates if vig pipe supports p010 format
  * @inline_rot_formats	formats supported by the inline rotator feature
  * @mdss_irqs	  bitmap with the irqs supported by the target
+ * @rc_count	number of rounded corner hardware instances
  */
 struct sde_mdss_cfg {
 	u32 hwversion;
@@ -1291,7 +1315,6 @@ struct sde_mdss_cfg {
 	u32 scaling_linewidth;
 	u32 inline_linewidth;
 	u32 max_mixer_width;
-	u32 max_dsc_width;
 	u32 max_mixer_blendstages;
 	u32 max_wb_linewidth;
 
@@ -1299,6 +1322,7 @@ struct sde_mdss_cfg {
 	u32 max_display_height;
 	u32 min_display_width;
 	u32 min_display_height;
+	u32 max_lm_per_display;
 
 	u32 qseed_type;
 	u32 csc_type;
@@ -1323,6 +1347,8 @@ struct sde_mdss_cfg {
 	bool has_decimation;
 	bool update_tcsr_disp_glitch;
 	bool has_base_layer;
+	bool allow_gdsc_toggle;
+	bool rc_lm_flush_override;
 
 	struct sde_sc_cfg sc_cfg;
 
@@ -1388,6 +1414,7 @@ struct sde_mdss_cfg {
 
 	u32 ad_count;
 	u32 ltm_count;
+	u32 rc_count;
 
 	u32 merge_3d_count;
 	struct sde_merge_3d_cfg merge_3d[MAX_BLOCKS];
@@ -1435,6 +1462,7 @@ struct sde_mdss_hw_cfg_handler {
 #define BLK_WB(s) ((s)->wb)
 #define BLK_AD(s) ((s)->ad)
 #define BLK_LTM(s) ((s)->ltm)
+#define BLK_RC(s) ((s)->rc)
 
 /**
  * sde_hw_set_preference: populate the individual hw lm preferences,

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 
 #include "sde_hw_util.h"
@@ -12,6 +12,9 @@
 #include "sde_dbg.h"
 #include "sde_kms.h"
 #include "sde_hw_reg_dma_v1_color_proc.h"
+#if defined(PXLW_IRIS_DUAL)
+#include "iris/dsi_iris5_api.h"
+#endif
 
 #define SDE_FETCH_CONFIG_RESET_VALUE   0x00000087
 
@@ -154,14 +157,6 @@
 /* traffic shaper clock in Hz */
 #define TS_CLK			19200000
 
-#define SDE_UNPACK_FORMAT_SETUP(fmt) (                                        \
-		((SDE_FORMAT_IS_FSC(fmt) == true) ?                           \
-		((fmt->element[3] << 24) | (fmt->element[0] << 16) |          \
-		(fmt->element[2] << 8) | (fmt->element[1] << 0)) :            \
-		((fmt->element[3] << 24) | (fmt->element[2] << 16) |          \
-		(fmt->element[1] << 8) | (fmt->element[0] << 0)))             \
-	)
-
 static inline int _sspp_subblk_offset(struct sde_hw_pipe *ctx,
 		int s_id,
 		u32 *idx)
@@ -202,6 +197,12 @@ static inline int _sspp_subblk_offset(struct sde_hw_pipe *ctx,
 	return rc;
 }
 
+#if defined(PXLW_IRIS_DUAL)
+int iris_sspp_subblk_offset(struct sde_hw_pipe *ctx, int s_id, u32 *idx)
+{
+	return _sspp_subblk_offset(ctx, s_id, idx);
+}
+#endif
 static void sde_hw_sspp_setup_multirect(struct sde_hw_pipe *ctx,
 		enum sde_sspp_multirect_index index,
 		enum sde_sspp_multirect_mode mode)
@@ -356,8 +357,8 @@ static void sde_hw_sspp_setup_format(struct sde_hw_pipe *ctx,
 	if (flags & SDE_SSPP_SOLID_FILL)
 		src_format |= BIT(22);
 
-	unpack = SDE_UNPACK_FORMAT_SETUP(fmt);
-
+	unpack = (fmt->element[3] << 24) | (fmt->element[2] << 16) |
+		(fmt->element[1] << 8) | (fmt->element[0] << 0);
 	src_format |= ((fmt->unpack_count - 1) << 12) |
 		(fmt->unpack_tight << 17) |
 		(fmt->unpack_align_msb << 18) |
@@ -369,7 +370,7 @@ static void sde_hw_sspp_setup_format(struct sde_hw_pipe *ctx,
 	}
 
 	if (fmt->fetch_mode != SDE_FETCH_LINEAR) {
-		if (SDE_FORMAT_IS_UBWC(fmt) || SDE_FORMAT_IS_FSC(fmt))
+		if (SDE_FORMAT_IS_UBWC(fmt))
 			opmode |= MDSS_MDP_OP_BWC_EN;
 		src_format |= (fmt->fetch_mode & 3) << 30; /*FRAME_FORMAT */
 		SDE_REG_WRITE(c, SSPP_FETCH_CONFIG,
@@ -1202,6 +1203,13 @@ static void sde_hw_sspp_setup_dgm_csc(struct sde_hw_pipe *ctx,
 	SDE_REG_WRITE(&ctx->hw, offset, op_mode);
 }
 
+#if defined(PXLW_IRIS_DUAL)
+static void sde_hw_sspp_setup_csc_v2(struct sde_hw_pipe *ctx,
+		const struct sde_format *fmt, struct sde_csc_cfg *data)
+{
+	return iris_sde_hw_sspp_setup_csc_v2(ctx, fmt, data);
+}
+#endif
 static void _setup_layer_ops(struct sde_hw_pipe *c,
 		unsigned long features, unsigned long perf_features,
 		bool is_virtual_pipe)
@@ -1233,7 +1241,14 @@ static void _setup_layer_ops(struct sde_hw_pipe *c,
 
 	if (test_bit(SDE_SSPP_CSC, &features) ||
 		test_bit(SDE_SSPP_CSC_10BIT, &features))
+#if defined(PXLW_IRIS_DUAL)
+	{
+#endif
 		c->ops.setup_csc = sde_hw_sspp_setup_csc;
+#if defined(PXLW_IRIS_DUAL)
+		c->ops.setup_csc_v2 = sde_hw_sspp_setup_csc_v2;
+	}
+#endif
 
 	if (test_bit(SDE_SSPP_DGM_CSC, &features))
 		c->ops.setup_dgm_csc = sde_hw_sspp_setup_dgm_csc;

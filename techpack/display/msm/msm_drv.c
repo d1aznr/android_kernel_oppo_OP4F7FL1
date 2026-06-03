@@ -47,6 +47,13 @@
 #include "msm_mmu.h"
 #include "sde_wb.h"
 #include "sde_dbg.h"
+#if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(CONFIG_PXLW_SOFT_IRIS)
+#include "dsi/iris/dsi_iris5_api.h"
+#endif
+
+#ifdef OPLUS_FEATURE_ADFR
+#include "oplus_adfr.h"
+#endif
 
 /*
  * MSM driver version:
@@ -130,7 +137,7 @@ module_param(reglog, bool, 0600);
 #endif
 
 #ifdef CONFIG_DRM_FBDEV_EMULATION
-static bool fbdev;
+static bool fbdev = true;
 MODULE_PARM_DESC(fbdev, "Enable fbdev compat layer");
 module_param(fbdev, bool, 0600);
 #endif
@@ -325,6 +332,8 @@ static int vblank_ctrl_queue_work(struct msm_drm_private *priv,
 					int crtc_id, bool enable)
 {
 	struct vblank_work *cur_work;
+	struct drm_crtc *crtc;
+	struct kthread_worker *worker;
 
 	if (!priv || crtc_id >= priv->num_crtcs)
 		return -EINVAL;
@@ -333,14 +342,15 @@ static int vblank_ctrl_queue_work(struct msm_drm_private *priv,
 	if (!cur_work)
 		return -ENOMEM;
 
+	crtc = priv->crtcs[crtc_id];
+
 	kthread_init_work(&cur_work->work, vblank_ctrl_worker);
 	cur_work->crtc_id = crtc_id;
 	cur_work->enable = enable;
 	cur_work->priv = priv;
+	worker = &priv->event_thread[crtc_id].worker;
 
-	kthread_queue_work(&priv->event_thread[crtc_id].worker,
-						&cur_work->work);
-
+	kthread_queue_work(worker, &cur_work->work);
 	return 0;
 }
 
@@ -366,6 +376,11 @@ static int msm_drm_uninit(struct device *dev)
 			priv->event_thread[i].thread = NULL;
 		}
 	}
+#ifdef OPLUS_FEATURE_ADFR
+	if (oplus_adfr_is_support()) {
+		oplus_adfr_thread_destroy(priv);
+	}
+#endif
 
 	drm_kms_helper_poll_fini(ddev);
 
@@ -637,6 +652,19 @@ static int msm_drm_display_thread_create(struct sched_param param,
 		priv->pp_event_thread = NULL;
 		return ret;
 	}
+
+#ifdef OPLUS_FEATURE_ADFR
+	/**
+	 * Use a seperate adfr thread for fake frame.
+	 * Because fake frame maybe causes crtc commit/event more heavy.
+	 * This can lead to commit miss TE/retire event delay
+	 */
+	if (oplus_adfr_is_support()) {
+		if (oplus_adfr_thread_create(&param, priv, ddev, dev)) {
+			return -EINVAL;
+		}
+	}
+#endif
 
 	return 0;
 
@@ -1012,10 +1040,11 @@ static void msm_lastclose(struct drm_device *dev)
 
 	/* check for splash status before triggering cleanup
 	 * if we end up here with splash status ON i.e before first
-	 * commit then ignore the last close call
+	 * commit then ignore the last close call. Also, ignore
+	 * if kms module is not yet initialized.
 	 */
-	if (kms && kms->funcs && kms->funcs->check_for_splash
-		&& kms->funcs->check_for_splash(kms))
+	if (!kms || (kms && kms->funcs && kms->funcs->check_for_splash
+		&& kms->funcs->check_for_splash(kms, NULL)))
 		return;
 
 	/*
@@ -1508,6 +1537,13 @@ static int msm_release(struct inode *inode, struct file *filp)
 		kfree(node);
 	}
 
+	/**
+	 * Handle preclose operation here for removing fb's whose
+	 * refcount > 1. This operation is not triggered from upstream
+	 * drm as msm_driver does not support DRIVER_LEGACY feature.
+	 */
+	msm_preclose(dev, file_priv);
+
 	ret = drm_release(inode, filp);
 	filp->private_data = NULL;
 end:
@@ -1603,17 +1639,24 @@ int msm_ioctl_power_ctrl(struct drm_device *dev, void *data,
 		pr_err("ignoring, unbalanced disable\n");
 	}
 
+	mutex_lock(&priv->phandle.ext_client_lock);
+
 	if (vote_req) {
-		if (power_ctrl->enable)
+		if (power_ctrl->enable) {
 			rc = pm_runtime_get_sync(dev->dev);
-		else
+			priv->phandle.is_ext_vote_en = true;
+		} else {
 			pm_runtime_put_sync(dev->dev);
+			 priv->phandle.is_ext_vote_en = false;
+		}
 
 		if (rc < 0)
 			ctx->enable_refcnt = old_cnt;
 		else
 			rc = 0;
 	}
+
+	mutex_unlock(&priv->phandle.ext_client_lock);
 
 	pr_debug("pid %d enable %d, refcnt %d, vote_req %d\n",
 			current->pid, power_ctrl->enable, ctx->enable_refcnt,
@@ -1637,6 +1680,10 @@ static const struct drm_ioctl_desc msm_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(MSM_RMFB2, msm_ioctl_rmfb2, DRM_UNLOCKED),
 	DRM_IOCTL_DEF_DRV(MSM_POWER_CTRL, msm_ioctl_power_ctrl,
 			DRM_RENDER_ALLOW),
+#if defined(OPLUS_FEATURE_PXLW_IRIS5) || defined(CONFIG_PXLW_SOFT_IRIS)
+	DRM_IOCTL_DEF_DRV(MSM_IRIS_OPERATE_CONF, msm_ioctl_iris_operate_conf, DRM_UNLOCKED|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(MSM_IRIS_OPERATE_TOOL, msm_ioctl_iris_operate_tool, DRM_UNLOCKED|DRM_RENDER_ALLOW),
+#endif
 };
 
 static const struct vm_operations_struct vm_ops = {
@@ -1665,7 +1712,6 @@ static struct drm_driver msm_driver = {
 				DRIVER_ATOMIC |
 				DRIVER_MODESET,
 	.open               = msm_open,
-	.preclose           = msm_preclose,
 	.postclose          = msm_postclose,
 	.lastclose          = msm_lastclose,
 	.irq_handler        = msm_irq,
@@ -1981,32 +2027,6 @@ int msm_get_mixer_count(struct msm_drm_private *priv,
 	}
 
 	return funcs->get_mixer_count(priv->kms, mode, res, num_lm);
-}
-
-int msm_get_dsc_count(struct msm_drm_private *priv,
-		u32 hdisplay, u32 *num_dsc)
-{
-	struct msm_kms *kms;
-	const struct msm_kms_funcs *funcs;
-
-	if (!priv) {
-		DRM_ERROR("invalid drm private struct\n");
-		return -EINVAL;
-	}
-
-	kms = priv->kms;
-	if (!kms) {
-		DRM_ERROR("invalid msm kms struct\n");
-		return -EINVAL;
-	}
-
-	funcs = kms->funcs;
-	if (!funcs || !funcs->get_dsc_count) {
-		DRM_ERROR("invalid function pointers\n");
-		return -EINVAL;
-	}
-
-	return funcs->get_dsc_count(priv->kms, hdisplay, num_dsc);
 }
 
 static int msm_drm_bind(struct device *dev)

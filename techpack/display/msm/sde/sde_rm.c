@@ -31,6 +31,10 @@
 #define RM_IS_TOPOLOGY_MATCH(t, r) ((t).num_lm == (r).num_lm && \
 				(t).num_comp_enc == (r).num_enc && \
 				(t).num_intf == (r).num_intf)
+#define IS_COMPATIBLE_PP_DSC(p, d) (p % 2 == d % 2)
+
+/* ~one vsync poll time for rsvp_nxt to cleared by modeset from commit thread */
+#define RM_NXT_CLEAR_POLL_TIMEOUT_US 16600
 
 /**
  * toplogy information to be used when ctl path version does not
@@ -62,11 +66,8 @@ static const struct sde_rm_topology_def g_ctl_ver_1_top_table[] = {
 	{   SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE_DSC, 2, 1, 1, 1, false },
 	{   SDE_RM_TOPOLOGY_DUALPIPE_DSCMERGE,    2, 2, 1, 1, false },
 	{   SDE_RM_TOPOLOGY_PPSPLIT,              1, 0, 2, 1, false },
-	{   SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE,     4, 0, 2, 1, false },
-	{   SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE_DSC, 4, 3, 2, 1, false },
-	{   SDE_RM_TOPOLOGY_QUADPIPE_DSCMERGE,    4, 4, 2, 1, false },
-	{   SDE_RM_TOPOLOGY_QUADPIPE_DSC4HSMERGE, 4, 4, 1, 1, false },
 };
+
 
 /**
  * struct sde_rm_requirements - Reservation requirements parameter bundle
@@ -206,17 +207,36 @@ static void _sde_rm_dec_resource_info(struct sde_rm *rm,
 
 void sde_rm_get_resource_info(struct sde_rm *rm,
 		struct drm_encoder *drm_enc,
-		struct msm_resource_caps_info *avail_res)
+		struct msm_resource_caps_info *avail_res,
+		 int display_type)
 {
 	struct sde_rm_hw_blk *blk;
 	enum sde_hw_blk_type type;
 	struct sde_rm_rsvp rsvp;
+	const struct sde_lm_cfg *lm_cfg;
 
+	mutex_lock(&rm->rm_lock);
 	memcpy(avail_res, &rm->avail_res,
 			sizeof(rm->avail_res));
 
+	/**
+	 * Layer Mixers which are primary display, secondary
+	 * display preferred and are available must not be provided
+	 * for connectors which are neither primary nor secondary.
+	 */
+	if (display_type != SDE_CONNECTOR_PRIMARY &&
+		display_type != SDE_CONNECTOR_SECONDARY) {
+		list_for_each_entry(blk, &rm->hw_blks[SDE_HW_BLK_LM], list) {
+			lm_cfg = to_sde_hw_mixer(blk->hw)->cap;
+			if (!blk->rsvp && (lm_cfg->features &
+					 (BIT(SDE_DISP_PRIMARY_PREF)
+					 | BIT(SDE_DISP_SECONDARY_PREF))))
+				avail_res->num_lm--;
+		}
+	}
+
 	if (!drm_enc)
-		return;
+		goto end;
 
 	rsvp.enc_id = drm_enc->base.id;
 
@@ -224,6 +244,9 @@ void sde_rm_get_resource_info(struct sde_rm *rm,
 		list_for_each_entry(blk, &rm->hw_blks[type], list)
 			if (blk->rsvp && blk->rsvp->enc_id == rsvp.enc_id)
 				_sde_rm_inc_resource_info(rm, avail_res, blk);
+end:
+	mutex_unlock(&rm->rm_lock);
+	return;
 }
 
 static void _sde_rm_print_rsvps(
@@ -304,28 +327,16 @@ void sde_rm_init_hw_iter(
 	iter->type = type;
 }
 
-enum sde_rm_topology_name sde_rm_get_topology_name(struct sde_rm *rm,
+enum sde_rm_topology_name sde_rm_get_topology_name(
 	struct msm_display_topology topology)
 {
 	int i;
 
 	for (i = 0; i < SDE_RM_TOPOLOGY_MAX; i++)
-		if (RM_IS_TOPOLOGY_MATCH(rm->topology_tbl[i], topology))
-			return rm->topology_tbl[i].top_name;
+		if (RM_IS_TOPOLOGY_MATCH(g_top_table[i], topology))
+			return g_top_table[i].top_name;
 
 	return SDE_RM_TOPOLOGY_NONE;
-}
-
-int sde_rm_get_topology_num_encoders(struct sde_rm *rm,
-	enum sde_rm_topology_name topology)
-{
-	int i;
-
-	for (i = 0; i < SDE_RM_TOPOLOGY_MAX; i++)
-		if (rm->topology_tbl[i].top_name == topology)
-			return rm->topology_tbl[i].num_comp_enc;
-
-	return 0;
 }
 
 static bool _sde_rm_get_hw_locked(struct sde_rm *rm, struct sde_rm_hw_iter *i)
@@ -1034,7 +1045,6 @@ static int _sde_rm_reserve_lms(
 	struct sde_rm_hw_blk *ds[MAX_BLOCKS];
 	struct sde_rm_hw_blk *pp[MAX_BLOCKS];
 	struct sde_rm_hw_iter iter_i, iter_j;
-	u32 lm_mask = 0;
 	int lm_count = 0;
 	int i, rc = 0;
 
@@ -1047,13 +1057,13 @@ static int _sde_rm_reserve_lms(
 	sde_rm_init_hw_iter(&iter_i, 0, SDE_HW_BLK_LM);
 	while (lm_count != reqs->topology->num_lm &&
 			_sde_rm_get_hw_locked(rm, &iter_i)) {
-		if (lm_mask & (1 << iter_i.blk->id))
-			continue;
+		memset(&lm, 0, sizeof(lm));
+		memset(&dspp, 0, sizeof(dspp));
+		memset(&ds, 0, sizeof(ds));
+		memset(&pp, 0, sizeof(pp));
 
+		lm_count = 0;
 		lm[lm_count] = iter_i.blk;
-		dspp[lm_count] = NULL;
-		ds[lm_count] = NULL;
-		pp[lm_count] = NULL;
 
 		SDE_DEBUG("blk id = %d, _lm_ids[%d] = %d\n",
 			iter_i.blk->id,
@@ -1069,24 +1079,15 @@ static int _sde_rm_reserve_lms(
 				&pp[lm_count], NULL))
 			continue;
 
-		lm_mask |= (1 << iter_i.blk->id);
 		++lm_count;
-
-		/* Return if peer is not needed */
-		if (lm_count == reqs->topology->num_lm)
-			break;
 
 		/* Valid primary mixer found, find matching peers */
 		sde_rm_init_hw_iter(&iter_j, 0, SDE_HW_BLK_LM);
 
-		while (_sde_rm_get_hw_locked(rm, &iter_j)) {
-			if (lm_mask & (1 << iter_j.blk->id))
+		while (lm_count != reqs->topology->num_lm &&
+				_sde_rm_get_hw_locked(rm, &iter_j)) {
+			if (iter_i.blk == iter_j.blk)
 				continue;
-
-			lm[lm_count] = iter_j.blk;
-			dspp[lm_count] = NULL;
-			ds[lm_count] = NULL;
-			pp[lm_count] = NULL;
 
 			if (!_sde_rm_check_lm_and_get_connected_blks(
 					rm, rsvp, reqs, iter_j.blk,
@@ -1094,23 +1095,16 @@ static int _sde_rm_reserve_lms(
 					&pp[lm_count], iter_i.blk))
 				continue;
 
+			lm[lm_count] = iter_j.blk;
 			SDE_DEBUG("blk id = %d, _lm_ids[%d] = %d\n",
-				iter_j.blk->id,
+				iter_i.blk->id,
 				lm_count,
 				_lm_ids ? _lm_ids[lm_count] : -1);
 
 			if (_lm_ids && (lm[lm_count])->id != _lm_ids[lm_count])
 				continue;
 
-			lm_mask |= (1 << iter_j.blk->id);
 			++lm_count;
-			break;
-		}
-
-		/* Rollback primary LM if peer is not found */
-		if (!iter_j.hw) {
-			lm_mask &= ~(1 << iter_i.blk->id);
-			--lm_count;
 		}
 	}
 
@@ -1119,7 +1113,10 @@ static int _sde_rm_reserve_lms(
 		return -ENAVAIL;
 	}
 
-	for (i = 0; i < lm_count; i++) {
+	for (i = 0; i < ARRAY_SIZE(lm); i++) {
+		if (!lm[i])
+			break;
+
 		lm[i]->rsvp_nxt = rsvp;
 		pp[i]->rsvp_nxt = rsvp;
 		if (dspp[i])
@@ -1237,7 +1234,8 @@ static int _sde_rm_reserve_ctls(
 static bool _sde_rm_check_dsc(struct sde_rm *rm,
 		struct sde_rm_rsvp *rsvp,
 		struct sde_rm_hw_blk *dsc,
-		struct sde_rm_hw_blk *paired_dsc)
+		struct sde_rm_hw_blk *paired_dsc,
+		struct sde_rm_hw_blk *pp_blk)
 {
 	const struct sde_dsc_cfg *dsc_cfg = to_sde_hw_dsc(dsc->hw)->caps;
 
@@ -1246,6 +1244,14 @@ static bool _sde_rm_check_dsc(struct sde_rm *rm,
 		SDE_DEBUG("dsc %d already reserved\n", dsc_cfg->id);
 		return false;
 	}
+
+	/**
+	 * This check is required for routing even numbered DSC
+	 * blks to any of the even numbered PP blks and odd numbered
+	 * DSC blks to any of the odd numbered PP blks.
+	 */
+	if (!pp_blk || !IS_COMPATIBLE_PP_DSC(pp_blk->id, dsc->id))
+		return false;
 
 	/* Check if this dsc is a peer of the proposed paired DSC */
 	if (paired_dsc) {
@@ -1262,6 +1268,22 @@ static bool _sde_rm_check_dsc(struct sde_rm *rm,
 	return true;
 }
 
+static void sde_rm_get_rsvp_nxt_hw_blks(
+		struct sde_rm *rm,
+		struct sde_rm_rsvp *rsvp,
+		int type,
+		struct sde_rm_hw_blk **blk_arr)
+{
+	struct sde_rm_hw_blk *blk;
+	int i = 0;
+
+	list_for_each_entry(blk, &rm->hw_blks[type], list) {
+		if (blk->rsvp_nxt && blk->rsvp_nxt->seq ==
+					rsvp->seq)
+			blk_arr[i++] = blk;
+	}
+}
+
 static int _sde_rm_reserve_dsc(
 		struct sde_rm *rm,
 		struct sde_rm_rsvp *rsvp,
@@ -1270,7 +1292,7 @@ static int _sde_rm_reserve_dsc(
 {
 	struct sde_rm_hw_iter iter_i, iter_j;
 	struct sde_rm_hw_blk *dsc[MAX_BLOCKS];
-	u32 reserve_mask = 0;
+	struct sde_rm_hw_blk *pp[MAX_BLOCKS];
 	int alloc_count = 0;
 	int num_dsc_enc = top->num_comp_enc;
 	int i;
@@ -1279,18 +1301,19 @@ static int _sde_rm_reserve_dsc(
 		return 0;
 
 	sde_rm_init_hw_iter(&iter_i, 0, SDE_HW_BLK_DSC);
+	sde_rm_get_rsvp_nxt_hw_blks(rm, rsvp, SDE_HW_BLK_PINGPONG, pp);
 
 	/* Find a first DSC */
 	while (alloc_count != num_dsc_enc &&
 			_sde_rm_get_hw_locked(rm, &iter_i)) {
-
-		if (reserve_mask & (1 << iter_i.blk->id))
-			continue;
+		memset(&dsc, 0, sizeof(dsc));
+		alloc_count = 0;
 
 		if (_dsc_ids && (iter_i.blk->id != _dsc_ids[alloc_count]))
 			continue;
 
-		if (!_sde_rm_check_dsc(rm, rsvp, iter_i.blk, NULL))
+		if (!_sde_rm_check_dsc(rm, rsvp, iter_i.blk, NULL,
+					 pp[alloc_count]))
 			continue;
 
 		SDE_DEBUG("blk id = %d, _dsc_ids[%d] = %d\n",
@@ -1298,26 +1321,22 @@ static int _sde_rm_reserve_dsc(
 			alloc_count,
 			_dsc_ids ? _dsc_ids[alloc_count] : -1);
 
-		reserve_mask |= (1 << iter_i.blk->id);
 		dsc[alloc_count++] = iter_i.blk;
-
-		/* Return if peer is not needed */
-		if (alloc_count == num_dsc_enc)
-			break;
 
 		/* Valid first dsc found, find matching peers */
 		sde_rm_init_hw_iter(&iter_j, 0, SDE_HW_BLK_DSC);
 
-		while (_sde_rm_get_hw_locked(rm, &iter_j)) {
-			if (reserve_mask & (1 << iter_j.blk->id))
+		while (alloc_count != num_dsc_enc &&
+				_sde_rm_get_hw_locked(rm, &iter_j)) {
+			if (iter_i.blk == iter_j.blk)
 				continue;
 
 			if (_dsc_ids && (iter_j.blk->id !=
 					_dsc_ids[alloc_count]))
 				continue;
 
-			if (!_sde_rm_check_dsc(rm, rsvp,
-					iter_j.blk, iter_i.blk))
+			if (!_sde_rm_check_dsc(rm, rsvp, iter_j.blk,
+					 iter_i.blk, pp[alloc_count]))
 				continue;
 
 			SDE_DEBUG("blk id = %d, _dsc_ids[%d] = %d\n",
@@ -1325,15 +1344,7 @@ static int _sde_rm_reserve_dsc(
 				alloc_count,
 				_dsc_ids ? _dsc_ids[alloc_count] : -1);
 
-			reserve_mask |= (1 << iter_j.blk->id);
 			dsc[alloc_count++] = iter_j.blk;
-			break;
-		}
-
-		/* Rollback primary DSC if peer is not found */
-		if (!iter_j.hw) {
-			reserve_mask &= ~(1 << iter_i.blk->id);
-			--alloc_count;
 		}
 	}
 
@@ -1343,7 +1354,7 @@ static int _sde_rm_reserve_dsc(
 		return -EINVAL;
 	}
 
-	for (i = 0; i < alloc_count; i++) {
+	for (i = 0; i < ARRAY_SIZE(dsc); i++) {
 		if (!dsc[i])
 			break;
 
@@ -1793,7 +1804,7 @@ static int _sde_rm_populate_requirements(
 		struct sde_rm_requirements *reqs)
 {
 	const struct drm_display_mode *mode = &crtc_state->mode;
-	int i;
+	int i, num_lm;
 
 	memset(reqs, 0, sizeof(*reqs));
 
@@ -1843,9 +1854,18 @@ static int _sde_rm_populate_requirements(
 		 */
 		reqs->topology =
 			&rm->topology_tbl[SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE];
-		if (sde_crtc_get_num_datapath(crtc_state->crtc) == 1)
+
+		num_lm = sde_crtc_get_num_datapath(crtc_state->crtc,
+				conn_state->connector);
+
+		if (num_lm == 1)
 			reqs->topology =
 				&rm->topology_tbl[SDE_RM_TOPOLOGY_SINGLEPIPE];
+		else if (num_lm == 0)
+			SDE_ERROR("Primary layer mixer is not set\n");
+
+		SDE_EVT32(num_lm, reqs->topology->num_lm,
+			reqs->topology->top_name, reqs->topology->num_ctl);
 	}
 
 	SDE_DEBUG("top_ctrl: 0x%llX num_h_tiles: %d\n", reqs->top_ctrl,
@@ -1919,8 +1939,7 @@ static struct drm_connector *_sde_rm_get_connector(
 	return NULL;
 }
 
-int sde_rm_update_topology(struct sde_rm *rm,
-	struct drm_connector_state *conn_state,
+int sde_rm_update_topology(struct drm_connector_state *conn_state,
 	struct msm_display_topology *topology)
 {
 	int i, ret = 0;
@@ -1933,8 +1952,8 @@ int sde_rm_update_topology(struct sde_rm *rm,
 	if (topology) {
 		top = *topology;
 		for (i = 0; i < SDE_RM_TOPOLOGY_MAX; i++)
-			if (RM_IS_TOPOLOGY_MATCH(rm->topology_tbl[i], top)) {
-				top_name = rm->topology_tbl[i].top_name;
+			if (RM_IS_TOPOLOGY_MATCH(g_top_table[i], top)) {
+				top_name = g_top_table[i].top_name;
 				break;
 			}
 	}
@@ -1945,84 +1964,6 @@ int sde_rm_update_topology(struct sde_rm *rm,
 			CONNECTOR_PROP_TOPOLOGY_NAME, top_name);
 
 	return ret;
-}
-
-bool sde_rm_topology_is_group(struct sde_rm *rm,
-		struct drm_crtc_state *state,
-		enum sde_rm_topology_group group)
-{
-	int i, ret = 0;
-	struct sde_crtc_state *cstate;
-	struct drm_connector *conn;
-	struct drm_connector_state *conn_state;
-	struct msm_display_topology topology;
-	enum sde_rm_topology_name name;
-
-	if ((!rm) || (!state) || (!state->state)) {
-		pr_err("invalid arguments: rm:%d state:%d atomic state:%d\n",
-				!rm, !state, state ? (!state->state) : 0);
-		return false;
-	}
-
-	cstate = to_sde_crtc_state(state);
-
-	for (i = 0; i < cstate->num_connectors; i++) {
-
-		conn = cstate->connectors[i];
-		if (!conn) {
-			SDE_DEBUG("invalid connector\n");
-			continue;
-		}
-
-		conn_state = drm_atomic_get_new_connector_state(state->state,
-				conn);
-		if (!conn_state) {
-			SDE_DEBUG("%s invalid connector state\n", conn->name);
-			continue;
-		}
-
-		ret = sde_connector_state_get_topology(conn_state, &topology);
-		if (ret) {
-			SDE_DEBUG("%s invalid topology\n", conn->name);
-			continue;
-		}
-
-		name = sde_rm_get_topology_name(rm, topology);
-		switch (group) {
-		case SDE_RM_TOPOLOGY_GROUP_SINGLEPIPE:
-			if (TOPOLOGY_SINGLEPIPE_MODE(name))
-				return true;
-			break;
-		case SDE_RM_TOPOLOGY_GROUP_DUALPIPE:
-			if (TOPOLOGY_DUALPIPE_MODE(name))
-				return true;
-			break;
-		case SDE_RM_TOPOLOGY_GROUP_QUADPIPE:
-			if (TOPOLOGY_QUADPIPE_MODE(name))
-				return true;
-			break;
-		case SDE_RM_TOPOLOGY_GROUP_3DMERGE:
-			if (topology.num_lm > topology.num_intf &&
-					!topology.num_enc)
-				return true;
-			break;
-		case SDE_RM_TOPOLOGY_GROUP_3DMERGE_DSC:
-			if (topology.num_lm > topology.num_enc &&
-					topology.num_enc)
-				return true;
-			break;
-		case SDE_RM_TOPOLOGY_GROUP_DSCMERGE:
-			if (topology.num_lm == topology.num_enc &&
-					topology.num_enc)
-				return true;
-			break;
-		default:
-			SDE_ERROR("invalid topology group\n");
-			return false;
-		}
-	}
-
-	return false;
 }
 
 /**
@@ -2165,6 +2106,30 @@ static int _sde_rm_commit_rsvp(
 	return ret;
 }
 
+/* call this only after rm_mutex held */
+struct sde_rm_rsvp *_sde_rm_poll_get_rsvp_nxt_locked(struct sde_rm *rm,
+		struct drm_encoder *enc)
+{
+	int i;
+	u32 loop_count = 20;
+	struct sde_rm_rsvp *rsvp_nxt = NULL;
+	u32 sleep = RM_NXT_CLEAR_POLL_TIMEOUT_US / loop_count;
+
+	for (i = 0; i < loop_count; i++) {
+		rsvp_nxt = _sde_rm_get_rsvp_nxt(rm, enc);
+		if (!rsvp_nxt)
+			return rsvp_nxt;
+
+		mutex_unlock(&rm->rm_lock);
+		SDE_DEBUG("iteration i:%d sleep range:%uus to %uus\n",
+				i, sleep, sleep * 2);
+		usleep_range(sleep, sleep * 2);
+		mutex_lock(&rm->rm_lock);
+	}
+	/* make sure to get latest rsvp_next to avoid use after free issues  */
+	return _sde_rm_get_rsvp_nxt(rm, enc);
+}
+
 int sde_rm_reserve(
 		struct sde_rm *rm,
 		struct drm_encoder *enc,
@@ -2216,16 +2181,26 @@ int sde_rm_reserve(
 	 * commit rsvps. This rsvp_nxt can be cleared by a back to back
 	 * check_only commit with modeset when its predecessor atomic
 	 * commit is delayed / not committed the reservation yet.
-	 * Bail out in such cases so that check only commit
-	 * comes again after earlier commit gets processed.
+	 * Poll for rsvp_nxt clear, allow the check_only commit if rsvp_nxt
+	 * gets cleared and bailout if it does not get cleared before timeout.
 	 */
-
 	if (test_only && rsvp_nxt) {
-		SDE_ERROR("cur %d nxt %d enc %d conn %d\n", rsvp_cur->seq,
-			 rsvp_nxt->seq, enc->base.id,
-			 conn_state->connector->base.id);
-		ret = -EINVAL;
-		goto end;
+		rsvp_nxt = _sde_rm_poll_get_rsvp_nxt_locked(rm, enc);
+		rsvp_cur = _sde_rm_get_rsvp(rm, enc);
+		if (rsvp_nxt) {
+			SDE_ERROR("poll timeout cur %d nxt %d enc %d\n",
+				rsvp_cur->seq, rsvp_nxt->seq, enc->base.id);
+			#ifdef OPLUS_BUG_STABILITY
+			SDE_MM_ERROR("[sde error] poll timeout cur %d nxt %d enc %d\n",
+				rsvp_cur->seq, rsvp_nxt->seq, enc->base.id);
+			#endif
+			SDE_EVT32(rsvp_cur->seq, rsvp_nxt->seq,
+					 enc->base.id, SDE_EVTLOG_ERROR);
+			SDE_EVT32(enc->base.id, (rsvp_cur) ? rsvp_cur->seq : -1,
+					rsvp_nxt->seq, SDE_EVTLOG_ERROR);
+			ret = -EINVAL;
+			goto end;
+		}
 	}
 
 	if (!test_only && rsvp_nxt)
@@ -2248,6 +2223,8 @@ int sde_rm_reserve(
 	 *       be discarded if in test-only mode.
 	 * If reservation is successful, and we're not in test-only, then we
 	 * replace the current with the next.
+	 * Poll for rsvp_nxt clear, allow the check_only commit if rsvp_nxt
+	 * gets cleared and bailout if it does not get cleared before timeout.
 	 */
 	rsvp_nxt = kzalloc(sizeof(*rsvp_nxt), GFP_KERNEL);
 	if (!rsvp_nxt) {
