@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2019, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
  */
-
 
 #ifndef _CAM_VFE_BUS_VER3_H_
 #define _CAM_VFE_BUS_VER3_H_
@@ -113,7 +112,6 @@ struct cam_vfe_bus_ver3_reg_offset_ubwc_client {
 	uint32_t lossy_thresh1;
 	uint32_t off_lossy_var;
 	uint32_t bw_limit;
-	uint32_t ubwc_comp_en_bit;
 };
 
 /*
