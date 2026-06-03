@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -77,8 +77,6 @@ enum sde_plane_sclcheck_state {
  * @defer_prepare_fb:	indicate if prepare_fb call was deferred
  * @pipe_order_flags: contains pipe order flags:
  *			SDE_SSPP_RIGHT - right pipe in source split pair
- * @layout_offset:	horizontal layout offset for global coordinate
- * @layout:		layout for topology requiring more than 1 lm pair.
  * @scaler3_cfg: configuration data for scaler3
  * @pixel_ext: configuration data for pixel extensions
  * @scaler_check_state: indicates status of user provided pixel extension data
@@ -98,9 +96,10 @@ struct sde_plane_state {
 	bool const_alpha_en;
 	bool pending;
 	bool defer_prepare_fb;
+#ifdef OPLUS_BUG_STABILITY
+	bool is_skip;
+#endif /* OPLUS_BUG_STABILITY */
 	uint32_t pipe_order_flags;
-	int layout_offset;
-	enum sde_layout layout;
 
 	/* scaler configuration */
 	struct sde_hw_scaler3_cfg scaler3_cfg;
@@ -221,6 +220,10 @@ int sde_plane_validate_multirect_v2(struct sde_multirect_plane_states *plane);
  * @drm_state: Pointer to DRM plane state
  */
 void sde_plane_clear_multirect(const struct drm_plane_state *drm_state);
+
+#ifdef OPLUS_BUG_STABILITY
+int sde_plane_check_fingerprint_layer(const struct drm_plane_state *drm_state);
+#endif
 
 /**
  * sde_plane_validate_src_addr - validate if current sspp addr of given

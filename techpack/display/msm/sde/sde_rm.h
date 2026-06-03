@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __SDE_RM_H__
@@ -14,23 +14,6 @@
 #define SINGLE_CTL	1
 #define DUAL_CTL	2
 
-#define TOPOLOGY_SINGLEPIPE_MODE(x) \
-	(x == SDE_RM_TOPOLOGY_SINGLEPIPE ||\
-		x == SDE_RM_TOPOLOGY_SINGLEPIPE_DSC)
-
-#define TOPOLOGY_DUALPIPE_MODE(x) \
-	(x == SDE_RM_TOPOLOGY_DUALPIPE ||\
-		x == SDE_RM_TOPOLOGY_DUALPIPE_DSC ||\
-		x == SDE_RM_TOPOLOGY_DUALPIPE_DSCMERGE ||\
-		x == SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE ||\
-		x == SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE_DSC)
-
-#define TOPOLOGY_QUADPIPE_MODE(x) \
-	(x == SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE ||\
-		x == SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE_DSC ||\
-		x == SDE_RM_TOPOLOGY_QUADPIPE_DSCMERGE || \
-		x == SDE_RM_TOPOLOGY_QUADPIPE_DSC4HSMERGE)
-
 /**
  * enum sde_rm_topology_name - HW resource use case in use by connector
  * @SDE_RM_TOPOLOGY_NONE:                 No topology in use currently
@@ -42,10 +25,6 @@
  * @SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE_DSC: 2 LM, 2 PP, 3DMux, 1 DSC, 1 INTF/WB
  * @SDE_RM_TOPOLOGY_DUALPIPE_DSCMERGE:    2 LM, 2 PP, 2 DSC Merge, 1 INTF/WB
  * @SDE_RM_TOPOLOGY_PPSPLIT:              1 LM, 2 PPs, 2 INTF/WB
- * @SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE      4 LM, 4 PP, 3DMux, 2 INTF
- * @SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE_DSC  4 LM, 4 PP, 3DMux, 3 DSC, 2 INTF
- * @SDE_RM_TOPOLOGY_QUADPIPE_DSCMERE      4 LM, 4 PP, 4 DSC Merge, 2 INTF
- * @SDE_RM_TOPOLOGY_QUADPIPE_DSC4HSMERGE  4 LM, 4 PP, 4 DSC Merge, 1 INTF
  */
 enum sde_rm_topology_name {
 	SDE_RM_TOPOLOGY_NONE = 0,
@@ -57,32 +36,7 @@ enum sde_rm_topology_name {
 	SDE_RM_TOPOLOGY_DUALPIPE_3DMERGE_DSC,
 	SDE_RM_TOPOLOGY_DUALPIPE_DSCMERGE,
 	SDE_RM_TOPOLOGY_PPSPLIT,
-	SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE,
-	SDE_RM_TOPOLOGY_QUADPIPE_3DMERGE_DSC,
-	SDE_RM_TOPOLOGY_QUADPIPE_DSCMERGE,
-	SDE_RM_TOPOLOGY_QUADPIPE_DSC4HSMERGE,
 	SDE_RM_TOPOLOGY_MAX,
-};
-
-/**
- * enum sde_rm_topology_group - Topology group selection
- * @SDE_RM_TOPOLOGY_GROUP_NONE:        No topology group in use currently
- * @SDE_RM_TOPOLOGY_GROUP_SINGLEPIPE:  Any topology that uses 1 LM
- * @SDE_RM_TOPOLOGY_GROUP_DUALPIPE:    Any topology that uses 2 LM
- * @SDE_RM_TOPOLOGY_GROUP_QUADPIPE:    Any topology that uses 4 LM
- * @SDE_RM_TOPOLOGY_GROUP_3DMERGE:     Any topology that uses 3D merge only
- * @SDE_RM_TOPOLOGY_GROUP_3DMERGE_DSC: Any topology that uses 3D merge + DSC
- * @SDE_RM_TOPOLOGY_GROUP_DSCMERGE:    Any topology that uses DSC merge
- */
-enum sde_rm_topology_group {
-	SDE_RM_TOPOLOGY_GROUP_NONE = 0,
-	SDE_RM_TOPOLOGY_GROUP_SINGLEPIPE,
-	SDE_RM_TOPOLOGY_GROUP_DUALPIPE,
-	SDE_RM_TOPOLOGY_GROUP_QUADPIPE,
-	SDE_RM_TOPOLOGY_GROUP_3DMERGE,
-	SDE_RM_TOPOLOGY_GROUP_3DMERGE_DSC,
-	SDE_RM_TOPOLOGY_GROUP_DSCMERGE,
-	SDE_RM_TOPOLOGY_GROUP_MAX,
 };
 
 /**
@@ -198,21 +152,11 @@ struct sde_rm_hw_request {
 
 /**
  * sde_rm_get_topology_name - get the name of the given topology config
- * @rm: SDE Resource Manager handle
  * @topology: msm_display_topology topology config
  * @Return: name of the given topology
  */
-enum sde_rm_topology_name sde_rm_get_topology_name(struct sde_rm *rm,
-	struct msm_display_topology topology);
-
-/**
- * sde_rm_get_topology_num_encoders - get number of encoders in given topology
- * @rm: SDE Resource Manager handle
- * @topology: topology name
- * @Return: number of encoders in given topology
- */
-int sde_rm_get_topology_num_encoders(struct sde_rm *rm,
-	enum sde_rm_topology_name topology);
+enum sde_rm_topology_name
+sde_rm_get_topology_name(struct msm_display_topology topology);
 
 /**
  * sde_rm_init - Read hardware catalog and create reservation tracking objects
@@ -324,14 +268,12 @@ int sde_rm_cont_splash_res_init(struct msm_drm_private *priv,
 
 /**
  * sde_rm_update_topology - sets topology property of the connector
- * @rm: SDE Resource Manager handle
  * @conn_state: drm state of the connector
  * @topology: topology selected for the display
  * @return: 0 on success or error
  */
-int sde_rm_update_topology(struct sde_rm *rm,
-	struct drm_connector_state *conn_state,
-	struct msm_display_topology *topology);
+int sde_rm_update_topology(struct drm_connector_state *conn_state,
+			   struct msm_display_topology *topology);
 
 /**
  * sde_rm_topology_is_dual_ctl - checks if topoloy requires two control paths
@@ -352,18 +294,6 @@ static inline bool sde_rm_topology_is_dual_ctl(struct sde_rm *rm,
 
 	return rm->topology_tbl[topology].num_ctl == DUAL_CTL;
 }
-
-/**
- * sde_rm_topology_is_group - check if the topology in use
- *	is part of the requested group
- * @rm: SDE Resource Manager handle
- * @state: drm state of the crtc
- * @group: topology group to check
- * @return: true if attached connector is in the topology group
- */
-bool sde_rm_topology_is_group(struct sde_rm *rm,
-		struct drm_crtc_state *state,
-		enum sde_rm_topology_group group);
 
 /**
  * sde_rm_ext_blk_create_reserve - Create external HW blocks
@@ -392,8 +322,9 @@ int sde_rm_ext_blk_destroy(struct sde_rm *rm,
  * @mr: sde rm object
  * @drm_enc: drm encoder object
  * @avail_res: out parameter, available resource object
+ * @display_type: type of the display in usage
  */
-void sde_rm_get_resource_info(struct sde_rm *rm,
-		struct drm_encoder *drm_enc,
-		struct msm_resource_caps_info *avail_res);
+void sde_rm_get_resource_info(struct sde_rm *rm, struct drm_encoder *drm_enc,
+			      struct msm_resource_caps_info *avail_res,
+			      int display_type);
 #endif /* __SDE_RM_H__ */

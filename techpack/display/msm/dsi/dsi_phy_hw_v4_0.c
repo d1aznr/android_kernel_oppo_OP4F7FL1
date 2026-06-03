@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/math64.h>
@@ -9,6 +9,7 @@
 #include "dsi_hw.h"
 #include "dsi_phy_hw.h"
 #include "dsi_catalog.h"
+#include "dsi_display.h"
 
 #define DSIPHY_CMN_REVISION_ID0						0x000
 #define DSIPHY_CMN_REVISION_ID1						0x004
@@ -110,6 +111,13 @@
 #define DSI_DYN_REFRESH_PLL_CTRL31             (0x090)
 #define DSI_DYN_REFRESH_PLL_UPPER_ADDR         (0x094)
 #define DSI_DYN_REFRESH_PLL_UPPER_ADDR2        (0x098)
+
+#ifdef OPLUS_BUG_STABILITY
+/* A tablet Pad, modify mipi */
+extern bool mipi_c_phy_oslo_flag;
+
+extern bool oplus_enhance_mipi_strength;
+#endif
 
 static int dsi_phy_hw_v4_0_is_pll_on(struct dsi_phy_hw *phy)
 {
@@ -262,10 +270,18 @@ static void dsi_phy_hw_cphy_enable(struct dsi_phy_hw *phy,
 	DSI_W32(phy, DSIPHY_CMN_GLBL_HSTX_STR_CTRL_0, glbl_hstx_str_ctrl_0);
 	DSI_W32(phy, DSIPHY_CMN_GLBL_PEMPH_CTRL_0, 0x11);
 	DSI_W32(phy, DSIPHY_CMN_GLBL_PEMPH_CTRL_1, 0x01);
-	DSI_W32(phy, DSIPHY_CMN_GLBL_RESCODE_OFFSET_TOP_CTRL,
+#ifdef OPLUS_BUG_STABILITY
+	/* A tablet Pad, modify mipi */
+	if (mipi_c_phy_oslo_flag) {
+		DSI_W32(phy, DSIPHY_CMN_GLBL_RESCODE_OFFSET_TOP_CTRL, 0x1F);
+		DSI_W32(phy, DSIPHY_CMN_GLBL_RESCODE_OFFSET_BOT_CTRL, 0x1F);
+	} else {
+		DSI_W32(phy, DSIPHY_CMN_GLBL_RESCODE_OFFSET_TOP_CTRL,
 			glbl_rescode_top_ctrl);
-	DSI_W32(phy, DSIPHY_CMN_GLBL_RESCODE_OFFSET_BOT_CTRL,
+		DSI_W32(phy, DSIPHY_CMN_GLBL_RESCODE_OFFSET_BOT_CTRL,
 			glbl_rescode_bot_ctrl);
+	}
+#endif
 	DSI_W32(phy, DSIPHY_CMN_GLBL_LPTX_STR_CTRL, 0x55);
 
 	/* Remove power down from all blocks */
@@ -321,6 +337,7 @@ static void dsi_phy_hw_dphy_enable(struct dsi_phy_hw *phy,
 	u32 glbl_hstx_str_ctrl_0 = 0;
 	u32 glbl_rescode_top_ctrl = 0;
 	u32 glbl_rescode_bot_ctrl = 0;
+	struct dsi_display *display = get_main_display();
 
 	/* Alter PHY configurations if data rate less than 1.5GHZ*/
 	if (cfg->bit_clk_rate_hz <= 1500000000)
@@ -330,8 +347,24 @@ static void dsi_phy_hw_dphy_enable(struct dsi_phy_hw *phy,
 		vreg_ctrl_0 = less_than_1500_mhz ? 0x53 : 0x52;
 		glbl_rescode_top_ctrl = less_than_1500_mhz ? 0x3d :  0x00;
 		glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x39 :  0x3c;
+#ifndef OPLUS_BUG_STABILITY
 		glbl_str_swi_cal_sel_ctrl = 0x00;
 		glbl_hstx_str_ctrl_0 = 0x88;
+#else
+		if (oplus_enhance_mipi_strength) {
+			if (display && display->panel &&
+			    display->panel->oplus_priv.is_oplus_project) {
+				glbl_str_swi_cal_sel_ctrl = 0x03;
+				glbl_hstx_str_ctrl_0 = 0xee;
+			} else {
+				glbl_str_swi_cal_sel_ctrl = 0x01;
+				glbl_hstx_str_ctrl_0 = 0xFF;
+			}
+		} else {
+			glbl_str_swi_cal_sel_ctrl = 0x01;
+			glbl_hstx_str_ctrl_0 = 0xCC;
+		}
+#endif
 	} else {
 		vreg_ctrl_0 = less_than_1500_mhz ? 0x5B : 0x59;
 		glbl_str_swi_cal_sel_ctrl = less_than_1500_mhz ? 0x03 : 0x00;
@@ -652,6 +685,7 @@ void dsi_phy_hw_v4_0_dyn_refresh_config(struct dsi_phy_hw *phy,
 					struct dsi_phy_cfg *cfg, bool is_master)
 {
 	u32 reg;
+	bool is_cphy = (cfg->phy_type == DSI_PHY_TYPE_CPHY) ? true : false;
 
 	if (is_master) {
 		DSI_DYN_REF_REG_W(phy->dyn_pll_base, DSI_DYN_REFRESH_PLL_CTRL19,
@@ -676,8 +710,8 @@ void dsi_phy_hw_v4_0_dyn_refresh_config(struct dsi_phy_hw *phy,
 			  DSIPHY_CMN_TIMING_CTRL_12, DSIPHY_CMN_TIMING_CTRL_13,
 			  cfg->timing.lane_v4[12], cfg->timing.lane_v4[13]);
 		DSI_DYN_REF_REG_W(phy->dyn_pll_base, DSI_DYN_REFRESH_PLL_CTRL26,
-			  DSIPHY_CMN_CTRL_0, DSIPHY_CMN_LANE_CTRL0,
-			  0x7f, 0x1f);
+				  DSIPHY_CMN_CTRL_0, DSIPHY_CMN_LANE_CTRL0,
+				  0x7f, is_cphy ? 0x17 : 0x1f);
 
 	} else {
 		reg = DSI_R32(phy, DSIPHY_CMN_CLK_CFG1);
@@ -711,8 +745,8 @@ void dsi_phy_hw_v4_0_dyn_refresh_config(struct dsi_phy_hw *phy,
 			  DSIPHY_CMN_TIMING_CTRL_13, DSIPHY_CMN_CTRL_0,
 			  cfg->timing.lane_v4[13], 0x7f);
 		DSI_DYN_REF_REG_W(phy->dyn_pll_base, DSI_DYN_REFRESH_PLL_CTRL9,
-			  DSIPHY_CMN_LANE_CTRL0, DSIPHY_CMN_CTRL_2,
-			  0x1f, 0x40);
+				  DSIPHY_CMN_LANE_CTRL0, DSIPHY_CMN_CTRL_2,
+				  is_cphy ? 0x17 : 0x1f, 0x40);
 		/*
 		 * fill with dummy register writes since controller will blindly
 		 * send these values to DSI PHY.
@@ -720,8 +754,9 @@ void dsi_phy_hw_v4_0_dyn_refresh_config(struct dsi_phy_hw *phy,
 		reg = DSI_DYN_REFRESH_PLL_CTRL11;
 		while (reg <= DSI_DYN_REFRESH_PLL_CTRL29) {
 			DSI_DYN_REF_REG_W(phy->dyn_pll_base, reg,
-				  DSIPHY_CMN_LANE_CTRL0, DSIPHY_CMN_CTRL_0,
-				  0x1f, 0x7f);
+					  DSIPHY_CMN_LANE_CTRL0,
+					  DSIPHY_CMN_CTRL_0,
+					  is_cphy ? 0x17 : 0x1f, 0x7f);
 			reg += 0x4;
 		}
 

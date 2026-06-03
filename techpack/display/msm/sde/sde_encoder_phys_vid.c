@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt)	"[drm:%s:%d] " fmt, __func__, __LINE__
@@ -52,7 +52,6 @@ static void drm_mode_to_intf_timing_params(
 	const struct sde_encoder_phys *phys_enc = &vid_enc->base;
 	enum msm_display_compression_ratio comp_ratio =
 				MSM_DISPLAY_COMPRESSION_RATIO_NONE;
-	bool fsc_mode = false;
 
 	memset(timing, 0, sizeof(*timing));
 
@@ -72,7 +71,6 @@ static void drm_mode_to_intf_timing_params(
 		return;
 	}
 
-	fsc_mode = mode->private_flags & MSM_MODE_FLAG_FSC_MODE;
 	/*
 	 * https://www.kernel.org/doc/htmldocs/drm/ch02s05.html
 	 *  Active Region      Front Porch   Sync   Back Porch
@@ -82,9 +80,7 @@ static void drm_mode_to_intf_timing_params(
 	 * <----------------- [hv]sync_end ------->
 	 * <---------------------------- [hv]total ------------->
 	 */
-	/* active width & height - adjusted for fsc mode */
-	timing->width = fsc_mode ? mode->hdisplay / 3 : mode->hdisplay;
-	timing->height = fsc_mode ? mode->vdisplay * 3 : mode->vdisplay;
+	timing->width = mode->hdisplay; /* active width */
 
 	if (phys_enc->hw_intf->cap->type != INTF_DP &&
 		vid_enc->base.comp_type == MSM_DISPLAY_COMPRESSION_DSC) {
@@ -95,6 +91,7 @@ static void drm_mode_to_intf_timing_params(
 			timing->width = DIV_ROUND_UP(timing->width, 3);
 	}
 
+	timing->height = mode->vdisplay; /* active height */
 	timing->xres = timing->width;
 	timing->yres = timing->height;
 	timing->h_back_porch = mode->htotal - mode->hsync_end;
@@ -127,7 +124,6 @@ static void drm_mode_to_intf_timing_params(
 	}
 
 	timing->wide_bus_en = vid_enc->base.wide_bus_en;
-	timing->dsc_4hs_merge_en = vid_enc->base.dsc_4hs_merge_en;
 
 	/*
 	 * for DP, divide the horizonal parameters by 2 when
@@ -273,10 +269,10 @@ static void programmable_fetch_config(struct sde_encoder_phys *phys_enc,
 
 	m = phys_enc->sde_kms->catalog;
 
-	vfp_fetch_lines = programmable_fetch_get_num_lines(vid_enc,
-							   timing, true);
+	vfp_fetch_lines =
+		programmable_fetch_get_num_lines(vid_enc, timing, false);
 	if (vfp_fetch_lines) {
-		vert_total = get_vertical_total(timing, true);
+		vert_total = get_vertical_total(timing, false);
 		horiz_total = get_horizontal_total(timing);
 		vfp_fetch_start_vsync_counter =
 			(vert_total - vfp_fetch_lines) * horiz_total + 1;
@@ -465,7 +461,7 @@ static void sde_encoder_phys_vid_setup_timing_engine(
 exit:
 	if (phys_enc->parent_ops.get_qsync_fps)
 		phys_enc->parent_ops.get_qsync_fps(
-				phys_enc->parent, &qsync_min_fps);
+			phys_enc->parent, &qsync_min_fps, mode.vrefresh);
 
 	/* only panels which support qsync will have a non-zero min fps */
 	if (qsync_min_fps) {
@@ -563,19 +559,6 @@ static void sde_encoder_phys_vid_underrun_irq(void *arg, int irq_idx)
 			phys_enc);
 }
 
-static void sde_encoder_phys_vid_lineptr_irq(void *arg, int irq_idx)
-{
-	struct sde_encoder_phys *phys_enc = arg;
-	ktime_t timestamp = ktime_get();
-
-	if (!phys_enc)
-		return;
-
-	if (phys_enc->parent_ops.handle_lineptr_virt)
-		phys_enc->parent_ops.handle_lineptr_virt(phys_enc->parent,
-				phys_enc, timestamp);
-}
-
 static void _sde_encoder_phys_vid_setup_irq_hw_idx(
 		struct sde_encoder_phys *phys_enc)
 {
@@ -592,10 +575,6 @@ static void _sde_encoder_phys_vid_setup_irq_hw_idx(
 		irq->hw_idx = phys_enc->intf_idx;
 
 	irq = &phys_enc->irq[INTR_IDX_UNDERRUN];
-	if (irq->irq_idx < 0)
-		irq->hw_idx = phys_enc->intf_idx;
-
-	irq = &phys_enc->irq[INTR_IDX_LINEPTR];
 	if (irq->irq_idx < 0)
 		irq->hw_idx = phys_enc->intf_idx;
 }
@@ -729,16 +708,6 @@ end:
 	return ret;
 }
 
-static int sde_encoder_phys_vid_set_lineptr(
-		struct sde_encoder_phys *phys_enc, u32 lineptr)
-{
-	if (phys_enc && phys_enc->hw_intf->ops.set_line_ptr)
-		return phys_enc->hw_intf->ops.set_line_ptr(
-				phys_enc->hw_intf, lineptr);
-
-	return -EINVAL;
-}
-
 static bool sde_encoder_phys_vid_wait_dma_trigger(
 		struct sde_encoder_phys *phys_enc)
 {
@@ -809,10 +778,6 @@ static void sde_encoder_phys_vid_enable(struct sde_encoder_phys *phys_enc)
 	if (!phys_enc->cont_splash_enabled)
 		sde_encoder_helper_split_config(phys_enc,
 				phys_enc->hw_intf->idx);
-
-	if (intf->ops.enable_dsc_4hs_merge)
-		intf->ops.enable_dsc_4hs_merge(intf,
-				phys_enc->dsc_4hs_merge_en);
 
 	sde_encoder_phys_vid_setup_timing_engine(phys_enc);
 
@@ -1160,13 +1125,21 @@ static void sde_encoder_phys_vid_handle_post_kickoff(
 static void sde_encoder_phys_vid_prepare_for_commit(
 		struct sde_encoder_phys *phys_enc)
 {
+	struct drm_crtc *crtc;
 
-	if (!phys_enc) {
+	if (!phys_enc || !phys_enc->parent) {
 		SDE_ERROR("invalid encoder parameters\n");
 		return;
 	}
 
-	if (sde_connector_is_qsync_updated(phys_enc->connector))
+	crtc = phys_enc->parent->crtc;
+	if (!crtc || !crtc->state) {
+		SDE_ERROR("invalid crtc or crtc state\n");
+		return;
+	}
+
+	if (!msm_is_mode_seamless_vrr(&crtc->state->adjusted_mode) &&
+	    sde_connector_is_qsync_updated(phys_enc->connector))
 		_sde_encoder_phys_vid_avr_ctrl(phys_enc);
 
 }
@@ -1191,16 +1164,9 @@ static void sde_encoder_phys_vid_irq_control(struct sde_encoder_phys *phys_enc,
 			return;
 
 		sde_encoder_helper_register_irq(phys_enc, INTR_IDX_UNDERRUN);
-		/*
-		 * IRQ will not be triggered unless a valid non-zero value
-		 * is written on the lineptr_conf register -
-		 * which will be controlled through the sysfs node write
-		 */
-		sde_encoder_helper_register_irq(phys_enc, INTR_IDX_LINEPTR);
 	} else {
 		sde_encoder_phys_vid_control_vblank_irq(phys_enc, false);
 		sde_encoder_helper_unregister_irq(phys_enc, INTR_IDX_UNDERRUN);
-		sde_encoder_helper_unregister_irq(phys_enc, INTR_IDX_LINEPTR);
 	}
 }
 
@@ -1297,7 +1263,6 @@ static void sde_encoder_phys_vid_init_ops(struct sde_encoder_phys_ops *ops)
 	ops->destroy = sde_encoder_phys_vid_destroy;
 	ops->get_hw_resources = sde_encoder_phys_vid_get_hw_resources;
 	ops->control_vblank_irq = sde_encoder_phys_vid_control_vblank_irq;
-	ops->set_lineptr = sde_encoder_phys_vid_set_lineptr;
 	ops->wait_for_commit_done = sde_encoder_phys_vid_wait_for_vblank;
 	ops->wait_for_vblank = sde_encoder_phys_vid_wait_for_vblank_no_notify;
 	ops->wait_for_tx_complete = sde_encoder_phys_vid_wait_for_vblank;
@@ -1377,12 +1342,6 @@ struct sde_encoder_phys *sde_encoder_phys_vid_init(
 	irq->intr_type = SDE_IRQ_TYPE_INTF_UNDER_RUN;
 	irq->intr_idx = INTR_IDX_UNDERRUN;
 	irq->cb.func = sde_encoder_phys_vid_underrun_irq;
-
-	irq = &phys_enc->irq[INTR_IDX_LINEPTR];
-	irq->name = "lineptr_irq";
-	irq->intr_type = SDE_IRQ_TYPE_PROG_LINE;
-	irq->intr_idx = INTR_IDX_LINEPTR;
-	irq->cb.func = sde_encoder_phys_vid_lineptr_irq;
 
 	atomic_set(&phys_enc->vblank_refcount, 0);
 	atomic_set(&phys_enc->pending_kickoff_cnt, 0);

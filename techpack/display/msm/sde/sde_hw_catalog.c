@@ -35,7 +35,7 @@
 /* default line width for sspp, mixer, ds (input), wb */
 #define DEFAULT_SDE_LINE_WIDTH 2048
 
-/* default line width for sspp, mixer, ds (input), dsc, wb */
+/* default output line width for ds */
 #define DEFAULT_SDE_OUTPUT_LINE_WIDTH 2560
 
 /* max mixer blend stages */
@@ -55,6 +55,9 @@
 
 /* default ubwc version */
 #define DEFAULT_SDE_UBWC_VERSION SDE_HW_UBWC_VER_10
+
+/* No UBWC */
+#define DEFAULT_SDE_UBWC_NONE 0x0
 
 /* default ubwc static config register value */
 #define DEFAULT_SDE_UBWC_STATIC 0x0
@@ -104,6 +107,7 @@
 #define MAX_DISPLAY_HEIGHT				5760
 #define MIN_DISPLAY_HEIGHT				0
 #define MIN_DISPLAY_WIDTH				0
+#define MAX_LM_PER_DISPLAY 2
 
 /* maximum XIN halt timeout in usec */
 #define VBIF_XIN_HALT_TIMEOUT		0x4000
@@ -222,6 +226,7 @@ enum {
 	PERF_CDP_SETTING,
 	PERF_CPU_MASK,
 	PERF_CPU_DMA_LATENCY,
+	PERF_CPU_IRQ_LATENCY,
 	PERF_PROP_MAX,
 };
 
@@ -322,7 +327,6 @@ enum {
 	DSC_OFF,
 	DSC_LEN,
 	DSC_PAIR_MASK,
-	DSC_LINEWIDTH,
 	DSC_PROP_MAX,
 };
 
@@ -377,6 +381,14 @@ enum {
 	LTM_OFF,
 	LTM_VERSION,
 	LTM_PROP_MAX,
+};
+
+enum {
+	RC_OFF,
+	RC_LEN,
+	RC_VERSION,
+	RC_MEM_TOTAL_SIZE,
+	RC_PROP_MAX,
 };
 
 enum {
@@ -510,42 +522,43 @@ static struct sde_prop_type sde_prop[] = {
 };
 
 static struct sde_prop_type sde_perf_prop[] = {
-	{PERF_MAX_BW_LOW, "qcom,sde-max-bw-low-kbps", false, PROP_TYPE_U32},
-	{PERF_MAX_BW_HIGH, "qcom,sde-max-bw-high-kbps", false, PROP_TYPE_U32},
-	{PERF_MIN_CORE_IB, "qcom,sde-min-core-ib-kbps", false, PROP_TYPE_U32},
-	{PERF_MIN_LLCC_IB, "qcom,sde-min-llcc-ib-kbps", false, PROP_TYPE_U32},
-	{PERF_MIN_DRAM_IB, "qcom,sde-min-dram-ib-kbps", false, PROP_TYPE_U32},
-	{PERF_CORE_IB_FF, "qcom,sde-core-ib-ff", false, PROP_TYPE_STRING},
-	{PERF_CORE_CLK_FF, "qcom,sde-core-clk-ff", false, PROP_TYPE_STRING},
-	{PERF_COMP_RATIO_RT, "qcom,sde-comp-ratio-rt", false,
-			PROP_TYPE_STRING},
-	{PERF_COMP_RATIO_NRT, "qcom,sde-comp-ratio-nrt", false,
-			PROP_TYPE_STRING},
-	{PERF_UNDERSIZED_PREFILL_LINES, "qcom,sde-undersizedprefill-lines",
-			false, PROP_TYPE_U32},
-	{PERF_DEST_SCALE_PREFILL_LINES, "qcom,sde-dest-scaleprefill-lines",
-			false, PROP_TYPE_U32},
-	{PERF_MACROTILE_PREFILL_LINES, "qcom,sde-macrotileprefill-lines",
-			false, PROP_TYPE_U32},
-	{PERF_YUV_NV12_PREFILL_LINES, "qcom,sde-yuv-nv12prefill-lines",
-			false, PROP_TYPE_U32},
-	{PERF_LINEAR_PREFILL_LINES, "qcom,sde-linearprefill-lines",
-			false, PROP_TYPE_U32},
-	{PERF_DOWNSCALING_PREFILL_LINES, "qcom,sde-downscalingprefill-lines",
-			false, PROP_TYPE_U32},
-	{PERF_XTRA_PREFILL_LINES, "qcom,sde-xtra-prefill-lines",
-			false, PROP_TYPE_U32},
-	{PERF_AMORTIZABLE_THRESHOLD, "qcom,sde-amortizable-threshold",
-			false, PROP_TYPE_U32},
-	{PERF_NUM_MNOC_PORTS, "qcom,sde-num-mnoc-ports",
-			false, PROP_TYPE_U32},
-	{PERF_AXI_BUS_WIDTH, "qcom,sde-axi-bus-width",
-			false, PROP_TYPE_U32},
-	{PERF_CDP_SETTING, "qcom,sde-cdp-setting", false,
-			PROP_TYPE_U32_ARRAY},
-	{PERF_CPU_MASK, "qcom,sde-qos-cpu-mask", false, PROP_TYPE_U32},
-	{PERF_CPU_DMA_LATENCY, "qcom,sde-qos-cpu-dma-latency", false,
-			PROP_TYPE_U32},
+	{ PERF_MAX_BW_LOW, "qcom,sde-max-bw-low-kbps", false, PROP_TYPE_U32 },
+	{ PERF_MAX_BW_HIGH, "qcom,sde-max-bw-high-kbps", false, PROP_TYPE_U32 },
+	{ PERF_MIN_CORE_IB, "qcom,sde-min-core-ib-kbps", false, PROP_TYPE_U32 },
+	{ PERF_MIN_LLCC_IB, "qcom,sde-min-llcc-ib-kbps", false, PROP_TYPE_U32 },
+	{ PERF_MIN_DRAM_IB, "qcom,sde-min-dram-ib-kbps", false, PROP_TYPE_U32 },
+	{ PERF_CORE_IB_FF, "qcom,sde-core-ib-ff", false, PROP_TYPE_STRING },
+	{ PERF_CORE_CLK_FF, "qcom,sde-core-clk-ff", false, PROP_TYPE_STRING },
+	{ PERF_COMP_RATIO_RT, "qcom,sde-comp-ratio-rt", false,
+	  PROP_TYPE_STRING },
+	{ PERF_COMP_RATIO_NRT, "qcom,sde-comp-ratio-nrt", false,
+	  PROP_TYPE_STRING },
+	{ PERF_UNDERSIZED_PREFILL_LINES, "qcom,sde-undersizedprefill-lines",
+	  false, PROP_TYPE_U32 },
+	{ PERF_DEST_SCALE_PREFILL_LINES, "qcom,sde-dest-scaleprefill-lines",
+	  false, PROP_TYPE_U32 },
+	{ PERF_MACROTILE_PREFILL_LINES, "qcom,sde-macrotileprefill-lines",
+	  false, PROP_TYPE_U32 },
+	{ PERF_YUV_NV12_PREFILL_LINES, "qcom,sde-yuv-nv12prefill-lines", false,
+	  PROP_TYPE_U32 },
+	{ PERF_LINEAR_PREFILL_LINES, "qcom,sde-linearprefill-lines", false,
+	  PROP_TYPE_U32 },
+	{ PERF_DOWNSCALING_PREFILL_LINES, "qcom,sde-downscalingprefill-lines",
+	  false, PROP_TYPE_U32 },
+	{ PERF_XTRA_PREFILL_LINES, "qcom,sde-xtra-prefill-lines", false,
+	  PROP_TYPE_U32 },
+	{ PERF_AMORTIZABLE_THRESHOLD, "qcom,sde-amortizable-threshold", false,
+	  PROP_TYPE_U32 },
+	{ PERF_NUM_MNOC_PORTS, "qcom,sde-num-mnoc-ports", false,
+	  PROP_TYPE_U32 },
+	{ PERF_AXI_BUS_WIDTH, "qcom,sde-axi-bus-width", false, PROP_TYPE_U32 },
+	{ PERF_CDP_SETTING, "qcom,sde-cdp-setting", false,
+	  PROP_TYPE_U32_ARRAY },
+	{ PERF_CPU_MASK, "qcom,sde-qos-cpu-mask", false, PROP_TYPE_U32 },
+	{ PERF_CPU_DMA_LATENCY, "qcom,sde-qos-cpu-dma-latency", false,
+	  PROP_TYPE_U32 },
+	{ PERF_CPU_IRQ_LATENCY, "qcom,sde-qos-cpu-irq-latency", false,
+	  PROP_TYPE_U32 },
 };
 
 static struct sde_prop_type sde_qos_prop[] = {
@@ -686,6 +699,14 @@ static struct sde_prop_type ltm_prop[] = {
 	{LTM_VERSION, "qcom,sde-dspp-ltm-version", false, PROP_TYPE_U32},
 };
 
+static struct sde_prop_type rc_prop[] = {
+	{ RC_OFF, "qcom,sde-dspp-rc-off", false, PROP_TYPE_U32_ARRAY },
+	{ RC_LEN, "qcom,sde-dspp-rc-size", false, PROP_TYPE_U32 },
+	{ RC_VERSION, "qcom,sde-dspp-rc-version", false, PROP_TYPE_U32 },
+	{ RC_MEM_TOTAL_SIZE, "qcom,sde-dspp-rc-mem-size", false,
+	  PROP_TYPE_U32 },
+};
+
 static struct sde_prop_type ds_top_prop[] = {
 	{DS_TOP_OFF, "qcom,sde-dest-scaler-top-off", false, PROP_TYPE_U32},
 	{DS_TOP_LEN, "qcom,sde-dest-scaler-top-size", false, PROP_TYPE_U32},
@@ -718,8 +739,6 @@ static struct sde_prop_type dsc_prop[] = {
 	{DSC_OFF, "qcom,sde-dsc-off", false, PROP_TYPE_U32_ARRAY},
 	{DSC_LEN, "qcom,sde-dsc-size", false, PROP_TYPE_U32},
 	{DSC_PAIR_MASK, "qcom,sde-dsc-pair-mask", false, PROP_TYPE_U32_ARRAY},
-	{DSC_LINEWIDTH, "qcom,sde-dsc-linewidth", false, PROP_TYPE_U32},
-
 };
 
 static struct sde_prop_type cdm_prop[] = {
@@ -1099,6 +1118,9 @@ static void _sde_sspp_setup_vig(struct sde_mdss_cfg *sde_cfg,
 		set_bit(SDE_PERF_SSPP_QOS_8LVL, &sspp->perf_features);
 	(*vig_count)++;
 
+	sblk->format_list = sde_cfg->vig_formats;
+	sblk->virt_format_list = sde_cfg->virt_vig_formats;
+
 	if (!prop_value)
 		return;
 
@@ -1207,8 +1229,6 @@ static void _sde_sspp_setup_vig(struct sde_mdss_cfg *sde_cfg,
 	if (PROP_VALUE_ACCESS(prop_value, VIG_INVERSE_PMA, 0))
 		set_bit(SDE_SSPP_INVERSE_PMA, &sspp->features);
 
-	sblk->format_list = sde_cfg->vig_formats;
-	sblk->virt_format_list = sde_cfg->virt_vig_formats;
 	if (sde_cfg->true_inline_rot_rev > 0) {
 		set_bit(SDE_SSPP_TRUE_INLINE_ROT, &sspp->features);
 		sblk->in_rot_format_list = sde_cfg->inline_rot_formats;
@@ -1225,9 +1245,9 @@ static void _sde_sspp_setup_vig(struct sde_mdss_cfg *sde_cfg,
 			MAX_DOWNSCALE_RATIO_INROT_PD_RT_DENOMINATOR;
 		sblk->in_rot_maxdwnscale_nrt =
 			MAX_DOWNSCALE_RATIO_INROT_NRT_DEFAULT;
-		sblk->in_rot_minpredwnscale_num =
+		sblk->in_rot_maxdwnscale_rt_nopd_num =
 			MAX_DOWNSCALE_RATIO_INROT_NOPD_RT_NUMERATOR;
-		sblk->in_rot_minpredwnscale_denom =
+		sblk->in_rot_maxdwnscale_rt_nopd_denom =
 			MAX_DOWNSCALE_RATIO_INROT_NOPD_RT_DENOMINATOR;
 	} else if (IS_SDE_INLINE_ROT_REV_100(sde_cfg->true_inline_rot_rev)) {
 		sblk->in_rot_maxdwnscale_rt_num =
@@ -2352,14 +2372,15 @@ static int sde_dspp_parse_dt(struct device_node *np,
 {
 	int rc, prop_count[DSPP_PROP_MAX], i;
 	int ad_prop_count[AD_PROP_MAX];
-	int ltm_prop_count[LTM_PROP_MAX];
+	int ltm_prop_count[LTM_PROP_MAX], rc_prop_count[RC_PROP_MAX];
 	bool prop_exists[DSPP_PROP_MAX], ad_prop_exists[AD_PROP_MAX];
-	bool ltm_prop_exists[LTM_PROP_MAX];
+	bool ltm_prop_exists[LTM_PROP_MAX], rc_prop_exists[RC_PROP_MAX];
 	bool blocks_prop_exists[DSPP_BLOCKS_PROP_MAX];
 	struct sde_prop_value *ad_prop_value = NULL, *ltm_prop_value = NULL;
+	struct sde_prop_value *rc_prop_value = NULL;
 	int blocks_prop_count[DSPP_BLOCKS_PROP_MAX];
 	struct sde_prop_value *prop_value = NULL, *blocks_prop_value = NULL;
-	u32 off_count, ad_off_count, ltm_off_count;
+	u32 off_count, ad_off_count, ltm_off_count, rc_off_count;
 	struct sde_dspp_cfg *dspp;
 	struct sde_dspp_sub_blks *sblk;
 	struct device_node *snp = NULL;
@@ -2418,6 +2439,22 @@ static int sde_dspp_parse_dt(struct device_node *np,
 		goto end;
 	rc = _read_dt_entry(np, ltm_prop, ARRAY_SIZE(ltm_prop), ltm_prop_count,
 		ltm_prop_exists, ltm_prop_value);
+	if (rc)
+		goto end;
+
+	/* Parse RC dtsi entries */
+	rc_prop_value =
+		kcalloc(RC_PROP_MAX, sizeof(struct sde_prop_value), GFP_KERNEL);
+	if (!rc_prop_value) {
+		rc = -ENOMEM;
+		goto end;
+	}
+	rc = _validate_dt_entry(np, rc_prop, ARRAY_SIZE(rc_prop), rc_prop_count,
+				&rc_off_count);
+	if (rc)
+		goto end;
+	rc = _read_dt_entry(np, rc_prop, ARRAY_SIZE(rc_prop), rc_prop_count,
+			    rc_prop_exists, rc_prop_value);
 	if (rc)
 		goto end;
 
@@ -2484,6 +2521,21 @@ static int sde_dspp_parse_dt(struct device_node *np,
 			set_bit(SDE_DSPP_LTM, &dspp->features);
 		}
 
+		sblk->rc.id = SDE_DSPP_RC;
+		sde_cfg->rc_count = rc_off_count;
+		if (rc_prop_value && (i < rc_off_count) &&
+		    rc_prop_exists[RC_OFF]) {
+			sblk->rc.base =
+				PROP_VALUE_ACCESS(rc_prop_value, RC_OFF, i);
+			sblk->rc.len =
+				PROP_VALUE_ACCESS(rc_prop_value, RC_LEN, 0);
+			sblk->rc.version =
+				PROP_VALUE_ACCESS(rc_prop_value, RC_VERSION, 0);
+			sblk->rc.mem_total_size = PROP_VALUE_ACCESS(
+				rc_prop_value, RC_MEM_TOTAL_SIZE, 0);
+			sblk->rc.idx = i;
+			set_bit(SDE_DSPP_RC, &dspp->features);
+		}
 	}
 
 end:
@@ -2491,6 +2543,8 @@ end:
 	kfree(ad_prop_value);
 	kfree(ltm_prop_value);
 	kfree(blocks_prop_value);
+	kfree(rc_prop_value);
+
 	return rc;
 }
 
@@ -2640,10 +2694,6 @@ static int sde_dsc_parse_dt(struct device_node *np,
 		prop_exists, prop_value);
 	if (rc)
 		goto end;
-
-	sde_cfg->max_dsc_width = prop_exists[DSC_LINEWIDTH] ?
-			PROP_VALUE_ACCESS(prop_value, DSC_LINEWIDTH, 0) :
-			DEFAULT_SDE_LINE_WIDTH;
 
 	for (i = 0; i < off_count; i++) {
 		dsc = sde_cfg->dsc + i;
@@ -3197,7 +3247,7 @@ static int _sde_parse_prop_check(struct sde_mdss_cfg *cfg,
 	cfg->ubwc_version = SDE_HW_UBWC_VER(PROP_VALUE_ACCESS(prop_value,
 			 UBWC_VERSION, 0));
 	if (!prop_exists[UBWC_VERSION])
-		cfg->ubwc_version = DEFAULT_SDE_UBWC_VERSION;
+		cfg->ubwc_version = DEFAULT_SDE_UBWC_NONE;
 
 	cfg->mdp[0].highest_bank_bit = PROP_VALUE_ACCESS(prop_value,
 			BANK_BIT, 0);
@@ -3208,11 +3258,22 @@ static int _sde_parse_prop_check(struct sde_mdss_cfg *cfg,
 			of_fdt_get_ddrtype() == LP_DDR4_TYPE)
 		cfg->mdp[0].highest_bank_bit = 0x02;
 
+	cfg->mdp[0].ubwc_static = PROP_VALUE_ACCESS(prop_value, UBWC_STATIC, 0);
+	if (!prop_exists[UBWC_STATIC])
+		cfg->mdp[0].ubwc_static = DEFAULT_SDE_UBWC_STATIC;
+
 	if (IS_SDE_MAJOR_MINOR_SAME(cfg->hwversion, SDE_HW_VER_630)) {
 		ret = _sde_get_ubwc_hbb(prop_exists, prop_value);
 
-		if (ret >= 0)
+		if (ret >= 0) {
+			u32 ubwc_static, hbb;
+
 			cfg->mdp[0].highest_bank_bit = ret;
+			ubwc_static = cfg->mdp[0].ubwc_static;
+			hbb = ((cfg->mdp[0].highest_bank_bit & 0x7) << 4);
+			ubwc_static = ((ubwc_static & 0xff8f) | hbb);
+			cfg->mdp[0].ubwc_static = ubwc_static;
+		}
 	}
 
 	cfg->macrotile_mode = PROP_VALUE_ACCESS(prop_value, MACROTILE_MODE, 0);
@@ -3221,10 +3282,6 @@ static int _sde_parse_prop_check(struct sde_mdss_cfg *cfg,
 
 	cfg->ubwc_bw_calc_version =
 		PROP_VALUE_ACCESS(prop_value, UBWC_BW_CALC_VERSION, 0);
-
-	cfg->mdp[0].ubwc_static = PROP_VALUE_ACCESS(prop_value, UBWC_STATIC, 0);
-	if (!prop_exists[UBWC_STATIC])
-		cfg->mdp[0].ubwc_static = DEFAULT_SDE_UBWC_STATIC;
 
 	cfg->mdp[0].ubwc_swizzle = PROP_VALUE_ACCESS(prop_value,
 			UBWC_SWIZZLE, 0);
@@ -3842,6 +3899,10 @@ static int _sde_perf_parse_dt_cfg(struct device_node *np,
 			prop_exists[PERF_CPU_DMA_LATENCY] ?
 			PROP_VALUE_ACCESS(prop_value, PERF_CPU_DMA_LATENCY, 0) :
 			DEFAULT_CPU_DMA_LATENCY;
+	cfg->perf.cpu_irq_latency =
+		prop_exists[PERF_CPU_IRQ_LATENCY] ?
+			PROP_VALUE_ACCESS(prop_value, PERF_CPU_IRQ_LATENCY, 0) :
+			PM_QOS_DEFAULT_VALUE;
 
 	return 0;
 }
@@ -4290,7 +4351,7 @@ static int _sde_hardware_pre_caps(struct sde_mdss_cfg *sde_cfg, uint32_t hw_rev)
 		sde_cfg->has_cwb_support = true;
 		sde_cfg->has_wb_ubwc = true;
 		sde_cfg->has_qsync = true;
-		sde_cfg->perf.min_prefill_lines = 24;
+		sde_cfg->perf.min_prefill_lines = 35;
 		sde_cfg->vbif_qos_nlvl = 8;
 		sde_cfg->ts_prefill_rev = 2;
 		sde_cfg->ctl_rev = SDE_CTL_CFG_VERSION_1_0_0;
@@ -4334,12 +4395,13 @@ static int _sde_hardware_pre_caps(struct sde_mdss_cfg *sde_cfg, uint32_t hw_rev)
 		sde_cfg->sui_block_xin_mask = 0xC01;
 		sde_cfg->has_hdr = false;
 		sde_cfg->has_sui_blendstage = true;
+		sde_cfg->allow_gdsc_toggle = true;
 		clear_bit(MDSS_INTR_AD4_0_INTR, sde_cfg->mdss_irqs);
 		clear_bit(MDSS_INTR_AD4_1_INTR, sde_cfg->mdss_irqs);
 	} else if (IS_LAGOON_TARGET(hw_rev)) {
 		sde_cfg->has_cwb_support = true;
 		sde_cfg->has_qsync = true;
-		sde_cfg->perf.min_prefill_lines = 24;
+		sde_cfg->perf.min_prefill_lines = 35;
 		sde_cfg->vbif_qos_nlvl = 8;
 		sde_cfg->ts_prefill_rev = 2;
 		sde_cfg->ctl_rev = SDE_CTL_CFG_VERSION_1_0_0;
@@ -4352,6 +4414,41 @@ static int _sde_hardware_pre_caps(struct sde_mdss_cfg *sde_cfg, uint32_t hw_rev)
 		clear_bit(MDSS_INTR_AD4_1_INTR, sde_cfg->mdss_irqs);
 		sde_cfg->has_hdr = true;
 		sde_cfg->has_vig_p010 = true;
+		sde_cfg->true_inline_rot_rev = SDE_INLINE_ROT_VERSION_2_0_0;
+		sde_cfg->has_3d_merge_reset = true;
+	} else if (IS_SCUBA_TARGET(hw_rev)) {
+		sde_cfg->has_cwb_support = false;
+		sde_cfg->has_qsync = true;
+		sde_cfg->perf.min_prefill_lines = 24;
+		sde_cfg->vbif_qos_nlvl = 8;
+		sde_cfg->ts_prefill_rev = 2;
+		sde_cfg->ctl_rev = SDE_CTL_CFG_VERSION_1_0_0;
+		sde_cfg->delay_prg_fetch_start = true;
+		sde_cfg->sui_ns_allowed = true;
+		sde_cfg->sui_misr_supported = true;
+		sde_cfg->sui_block_xin_mask = 0x1;
+		sde_cfg->has_hdr = false;
+		sde_cfg->has_sui_blendstage = true;
+		sde_cfg->allow_gdsc_toggle = true;
+		clear_bit(MDSS_INTR_AD4_0_INTR, sde_cfg->mdss_irqs);
+		clear_bit(MDSS_INTR_AD4_1_INTR, sde_cfg->mdss_irqs);
+	} else if (IS_KHAJE_TARGET(hw_rev)) {
+		sde_cfg->has_cwb_support = false;
+		sde_cfg->has_qsync = true;
+		sde_cfg->perf.min_prefill_lines = 24;
+		sde_cfg->vbif_qos_nlvl = 8;
+		sde_cfg->ts_prefill_rev = 2;
+		sde_cfg->ctl_rev = SDE_CTL_CFG_VERSION_1_0_0;
+		sde_cfg->delay_prg_fetch_start = true;
+		sde_cfg->sui_ns_allowed = true;
+		sde_cfg->sui_misr_supported = true;
+		sde_cfg->sui_block_xin_mask = 0xC01;
+		sde_cfg->has_hdr = false;
+		sde_cfg->has_sui_blendstage = true;
+		sde_cfg->allow_gdsc_toggle = true;
+		clear_bit(MDSS_INTR_AD4_0_INTR, sde_cfg->mdss_irqs);
+		clear_bit(MDSS_INTR_AD4_1_INTR, sde_cfg->mdss_irqs);
+		sde_cfg->rc_lm_flush_override = true;
 	} else {
 		SDE_ERROR("unsupported chipset id:%X\n", hw_rev);
 		sde_cfg->perf.min_prefill_lines = 0xffff;
@@ -4397,6 +4494,9 @@ static int _sde_hardware_post_caps(struct sde_mdss_cfg *sde_cfg,
 			set_bit(SDE_SSPP_BLOCK_SEC_UI,
 					&sde_cfg->sspp[i].features);
 	}
+
+	/* this should be updated based on HW rev in future */
+	sde_cfg->max_lm_per_display = MAX_LM_PER_DISPLAY;
 
 	for (i = 0; i < sde_cfg->limit_count; i++) {
 		if (!strcmp(sde_cfg->limit_cfg[i].name,

@@ -166,11 +166,7 @@ static int dp_parser_misc(struct dp_parser *parser)
 	if (rc)
 		parser->max_lclk_khz = DP_MAX_LINK_CLK_KHZ;
 
-	parser->force_bond_mode = of_property_read_bool(of_node,
-			"qcom,dp-force-bond-mode");
-
-	parser->display_type = of_get_property(of_node,
-					"qcom,display-type", NULL);
+	parser->display_type = of_get_property(of_node, "label", NULL);
 	if (!parser->display_type)
 		parser->display_type = "unknown";
 
@@ -714,6 +710,10 @@ static int dp_parser_mst(struct dp_parser *parser)
 
 	parser->has_mst = of_property_read_bool(dev->of_node,
 			"qcom,mst-enable");
+
+	parser->no_mst_encoder =
+		of_property_read_bool(dev->of_node, "qcom,no-mst-encoder");
+
 	parser->has_mst_sideband = parser->has_mst;
 
 	DP_DEBUG("mst parsing successful. mst:%d\n", parser->has_mst);
@@ -722,12 +722,6 @@ static int dp_parser_mst(struct dp_parser *parser)
 		of_property_read_u32_index(dev->of_node,
 				"qcom,mst-fixed-topology-ports", i,
 				&parser->mst_fixed_port[i]);
-		of_property_read_string_index(
-				dev->of_node,
-				"qcom,mst-fixed-topology-display-types", i,
-				&parser->mst_fixed_display_type[i]);
-		if (!parser->mst_fixed_display_type[i])
-			parser->mst_fixed_display_type[i] = "unknown";
 	}
 
 	return 0;
@@ -735,17 +729,26 @@ static int dp_parser_mst(struct dp_parser *parser)
 
 static void dp_parser_dsc(struct dp_parser *parser)
 {
+	int rc;
 	struct device *dev = &parser->pdev->dev;
 
 	parser->dsc_feature_enable = of_property_read_bool(dev->of_node,
 			"qcom,dsc-feature-enable");
 
-	parser->dsc_continuous_pps = of_property_read_bool(dev->of_node,
-			"qcom,dsc-continuous-pps");
+	rc = of_property_read_u32(dev->of_node, "qcom,max-dp-dsc-blks",
+				  &parser->max_dp_dsc_blks);
+	if (rc || !parser->max_dp_dsc_blks)
+		parser->dsc_feature_enable = false;
 
-	DP_DEBUG("dsc parsing successful. dsc:%d, cont_pps:%d\n",
-			parser->dsc_feature_enable,
-			parser->dsc_continuous_pps);
+	rc = of_property_read_u32(dev->of_node,
+				  "qcom,max-dp-dsc-input-width-pixs",
+				  &parser->max_dp_dsc_input_width_pixs);
+	if (rc || !parser->max_dp_dsc_input_width_pixs)
+		parser->dsc_feature_enable = false;
+
+	DP_DEBUG("dsc parsing successful. dsc:%d, blks:%d, width:%d\n",
+		 parser->dsc_feature_enable, parser->max_dp_dsc_blks,
+		 parser->max_dp_dsc_input_width_pixs);
 }
 
 static void dp_parser_fec(struct dp_parser *parser)

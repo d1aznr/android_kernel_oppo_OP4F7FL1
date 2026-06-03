@@ -81,6 +81,16 @@
 
 #define SDE_ERROR(fmt, ...) pr_err("[sde error]" fmt, ##__VA_ARGS__)
 
+#ifdef OPLUS_BUG_STABILITY
+#include <soc/oplus/system/oplus_mm_kevent_fb.h>
+#define SDE_MM_ERROR(fmt, ...)                                                 \
+	do {                                                                   \
+		pr_err("[sde error]" fmt, ##__VA_ARGS__);                      \
+		mm_fb_display_kevent_named(MM_FB_KEY_RATELIMIT_1H, fmt,        \
+					   ##__VA_ARGS__);                     \
+	} while (0)
+#endif /* OPLUS_BUG_STABILITY */
+
 #define POPULATE_RECT(rect, a, b, c, d, Q16_flag) \
 	do {						\
 		(rect)->x = (Q16_flag) ? (a) >> 16 : (a);    \
@@ -299,6 +309,7 @@ struct sde_kms {
 	cpumask_t irq_cpu_mask;
 	struct pm_qos_request pm_qos_irq_req;
 	struct irq_affinity_notify affinity_notify;
+	bool pm_qos_irq_req_en;
 };
 
 /**
@@ -657,4 +668,13 @@ void sde_kms_timeline_status(struct drm_device *dev);
  */
 int sde_kms_handle_recovery(struct drm_encoder *encoder);
 
+/**
+ * sde_kms_update_pm_qos_irq_request - Update Qos vote for CPU receiving
+ *					display IRQ
+ * @sde_kms : pointer to sde_kms structure
+ * @enable : indicates request to be enabled or disabled
+ * @skip_lock : indicates if lock needs to be acquired
+ */
+void sde_kms_update_pm_qos_irq_request(struct sde_kms *sde_kms, bool enable,
+				       bool skip_lock);
 #endif /* __sde_kms_H__ */

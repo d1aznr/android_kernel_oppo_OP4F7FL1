@@ -121,6 +121,9 @@ enum msm_mdp_plane_property {
 	PLANE_PROP_PREFILL_TIME,
 	PLANE_PROP_SCALER_V1,
 	PLANE_PROP_SCALER_V2,
+#ifdef OPLUS_BUG_STABILITY
+	PLANE_PROP_CUSTOM,
+#endif /* OPLUS_BUG_STABILITY */
 	PLANE_PROP_INVERSE_PMA,
 
 	/* enum/bitmask properties */
@@ -128,7 +131,6 @@ enum msm_mdp_plane_property {
 	PLANE_PROP_SRC_CONFIG,
 	PLANE_PROP_FB_TRANSLATION_MODE,
 	PLANE_PROP_MULTIRECT_MODE,
-	PLANE_PROP_LAYOUT,
 
 	/* total # of properties */
 	PLANE_PROP_COUNT
@@ -139,6 +141,7 @@ enum msm_mdp_crtc_property {
 	CRTC_PROP_DEST_SCALER_LUT_ED,
 	CRTC_PROP_DEST_SCALER_LUT_CIR,
 	CRTC_PROP_DEST_SCALER_LUT_SEP,
+	CRTC_PROP_DSPP_INFO,
 
 	/* # of blob properties */
 	CRTC_PROP_BLOBCOUNT,
@@ -161,6 +164,9 @@ enum msm_mdp_crtc_property {
 	CRTC_PROP_SECURITY_LEVEL,
 	CRTC_PROP_IDLE_TIMEOUT,
 	CRTC_PROP_DEST_SCALER,
+#ifdef OPLUS_BUG_STABILITY
+	CRTC_PROP_CUSTOM,
+#endif
 	CRTC_PROP_CAPTURE_OUTPUT,
 
 	CRTC_PROP_IDLE_PC_STATE,
@@ -191,6 +197,9 @@ enum msm_mdp_conn_property {
 	CONNECTOR_PROP_ROI_V1,
 	CONNECTOR_PROP_BL_SCALE,
 	CONNECTOR_PROP_SV_BL_SCALE,
+#ifdef OPLUS_BUG_STABILITY
+	CONNECTOR_PROP_CUSTOM,
+#endif
 	CONNECTOR_PROP_SUPPORTED_COLORSPACES,
 
 	/* enum/bitmask properties */
@@ -201,6 +210,10 @@ enum msm_mdp_conn_property {
 	CONNECTOR_PROP_FB_TRANSLATION_MODE,
 	CONNECTOR_PROP_QSYNC_MODE,
 	CONNECTOR_PROP_CMD_FRAME_TRIGGER_MODE,
+
+#ifdef OPLUS_FEATURE_ADFR
+	CONNECTOR_PROP_QSYNC_MIN_FPS,
+#endif
 
 	/* total # of properties */
 	CONNECTOR_PROP_COUNT
@@ -360,9 +373,6 @@ struct msm_roi_caps {
  * @range_bpg_offset:        Bits per group adjustment.
  * @extra_width:             Extra width required in timing calculations.
  * @pps_delay_ms:            Post PPS command delay in milliseconds.
- * @dsc_4hs_merge_en:         Using DSC 4HS merge topology
- * @dsc_4hs_merge_padding     4HS merge DSC pair padding value in bytes
- * @dsc_4hs_merge_alignment   4HS merge DSC alignment value in bytes
  */
 struct msm_display_dsc_info {
 	u8 version;
@@ -421,9 +431,6 @@ struct msm_display_dsc_info {
 
 	u32 extra_width;
 	u32 pps_delay_ms;
-	bool dsc_4hs_merge_en;
-	u32 dsc_4hs_merge_padding;
-	u32 dsc_4hs_merge_alignment;
 };
 
 /**
@@ -466,7 +473,6 @@ struct msm_display_topology {
  * @comp_info:       compression info supported
  * @roi_caps:        panel roi capabilities
  * @wide_bus_en:	wide-bus mode cfg for interface module
- * @dsc_4hs_merge_en:   mode support DSC 4 hard slice merge topology
  * @mdp_transfer_time_us   Specifies the mdp transfer time for command mode
  *                         panels in microseconds.
  */
@@ -481,7 +487,6 @@ struct msm_mode_info {
 	struct msm_compression_info comp_info;
 	struct msm_roi_caps roi_caps;
 	bool wide_bus_en;
-	bool dsc_4hs_merge_en;
 	u32 mdp_transfer_time_us;
 };
 
@@ -521,11 +526,8 @@ struct msm_resource_caps_info {
  *				 used instead of panel TE in cmd mode panels
  * @roi_caps:           Region of interest capability info
  * @qsync_min_fps	Minimum fps supported by Qsync feature
+ * @has_qsync_min_fps_list True if dsi-supported-qsync-min-fps-list exits
  * @te_source		vsync source pin information
- * @dsc_count:		max dsc hw blocks used by display (only available
- *			for dsi display)
- * @lm_count:		max layer mixer blocks used by display (only available
- *			for dsi display)
  */
 struct msm_display_info {
 	int intf_type;
@@ -548,10 +550,9 @@ struct msm_display_info {
 	struct msm_roi_caps roi_caps;
 
 	uint32_t qsync_min_fps;
-	uint32_t te_source;
+	bool has_qsync_min_fps_list;
 
-	uint32_t dsc_count;
-	uint32_t lm_count;
+	uint32_t te_source;
 };
 
 #define MSM_MAX_ROI	4
@@ -583,6 +584,9 @@ struct msm_display_kickoff_params {
 struct msm_display_conn_params {
 	uint32_t qsync_mode;
 	bool qsync_update;
+#ifdef OPLUS_FEATURE_ADFR
+	uint32_t qsync_dynamic_min_fps;
+#endif
 };
 
 /**
@@ -659,6 +663,10 @@ struct msm_drm_private {
 
 	struct msm_drm_thread disp_thread[MAX_CRTCS];
 	struct msm_drm_thread event_thread[MAX_CRTCS];
+
+#ifdef OPLUS_FEATURE_ADFR
+	struct msm_drm_thread adfr_thread[MAX_CRTCS];
+#endif
 
 	struct task_struct *pp_event_thread;
 	struct kthread_worker pp_event_worker;
@@ -895,16 +903,11 @@ struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
 		struct drm_file *file, const struct drm_mode_fb_cmd2 *mode_cmd);
 struct drm_framebuffer * msm_alloc_stolen_fb(struct drm_device *dev,
 		int w, int h, int p, uint32_t format);
+int msm_fb_obj_get_attrs(struct drm_gem_object *obj, int *fb_ns, int *fb_sec,
+			 int *fb_sec_dir, unsigned long *flags);
+struct drm_fb_helper *msm_fbdev_init(struct drm_device *dev);
+void msm_fbdev_free(struct drm_device *dev);
 
-#ifdef CONFIG_DRM_FBDEV_EMULATION
-static inline struct drm_fb_helper *msm_fbdev_init(struct drm_device *dev)
-{
-	return NULL;
-}
-static inline void msm_fbdev_free(struct drm_device *dev)
-{
-}
-#endif
 struct hdmi;
 #ifdef CONFIG_DRM_MSM_HDMI
 int msm_hdmi_modeset_init(struct hdmi *hdmi, struct drm_device *dev,
@@ -1055,10 +1058,5 @@ static inline unsigned long timeout_to_jiffies(const ktime_t *timeout)
 int msm_get_mixer_count(struct msm_drm_private *priv,
 		const struct drm_display_mode *mode,
 		const struct msm_resource_caps_info *res, u32 *num_lm);
-
-int msm_get_dsc_count(struct msm_drm_private *priv,
-	u32 hdisplay, u32 *num_dsc);
-
-
 
 #endif /* __MSM_DRV_H__ */

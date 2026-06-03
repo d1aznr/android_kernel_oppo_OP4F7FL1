@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, 2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _DP_DRM_H_
@@ -124,32 +124,13 @@ int dp_connector_get_info(struct drm_connector *connector,
 		struct msm_display_info *info, void *display);
 
 /**
- * dp_connector_post_open - handle the post open functionalities
+ * dp_connector_post_open - handle the post open functionalites
  * @connector: Pointer to drm connector structure
  * @display: Pointer to private display structure
  */
 void dp_connector_post_open(struct drm_connector *connector, void *display);
 
-/**
- * dp_conn_set_info_blob - callback to perform info blob initialization
- * @connector: Pointer to drm connector structure
- * @info: Pointer to sde connector info structure
- * @display: Pointer to private display handle
- * @mode_info: Pointer to mode info structure
- * Returns: Zero on success
- */
-int dp_connnector_set_info_blob(struct drm_connector *connector,
-		void *info, void *display, struct msm_mode_info *mode_info);
-
-/**
- * dp_drm_bridge_init- drm dp bridge initialize
- * @display: Pointer to private display structure
- * @encoder: encoder for this dp bridge
- * @max_mixer_count: max available mixers for dp display
- * @max_dsc_count: max available dsc for dp display
- */
-int dp_drm_bridge_init(void *display, struct drm_encoder *encoder,
-	u32 max_mixer_count, u32 max_dsc_count);
+int dp_drm_bridge_init(void *display, struct drm_encoder *encoder);
 
 void dp_drm_bridge_deinit(void *display);
 
@@ -179,14 +160,6 @@ int dp_mst_drm_bridge_init(void *display,
 	struct drm_encoder *encoder);
 
 /**
- * dp_mst_drm_super_bridge_init - initialize mst super bridge
- * @display: Pointer to private display structure
- * @encoder: Pointer to encoder for mst bridge mapping
- */
-int dp_mst_drm_super_bridge_init(void *display,
-	struct drm_encoder *encoder);
-
-/**
  * dp_mst_drm_bridge_deinit - de-initialize mst bridges
  * @display: Pointer to private display structure
  */
@@ -203,6 +176,18 @@ int dp_mst_init(struct dp_display *dp_display);
  * @display: Pointer to private display structure
  */
 void dp_mst_deinit(struct dp_display *dp_display);
+
+/**
+ * dp_conn_set_info_blob - callback to perform info blob initialization
+ * @connector: Pointer to drm connector structure
+ * @info: Pointer to sde connector info structure
+ * @display: Pointer to private display handle
+ * @mode_info: Pointer to mode info structure
+ * Returns: Zero on success
+ */
+int dp_connnector_set_info_blob(struct drm_connector *connector, void *info,
+				void *display, struct msm_mode_info *mode_info);
+
 #else
 static inline int dp_connector_config_hdr(struct drm_connector *connector,
 		void *display, struct sde_connector_state *c_state)
@@ -304,6 +289,13 @@ static inline int dp_mst_deinit(struct dp_display *dp_display)
 {
 	return 0;
 }
+
+int dp_connnector_set_info_blob(struct drm_connector *connector, void *info,
+				void *display, struct msm_mode_info *mode_info)
+{
+	return 0;
+}
+
 #endif
 
 #endif /* _DP_DRM_H_ */

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _SDE_CONNECTOR_H_
@@ -338,6 +338,14 @@ struct sde_connector_ops {
 	 */
 	int (*prepare_commit)(void *display,
 		struct msm_display_conn_params *params);
+
+	/**
+	 * get_qsync_min_fps - Get qsync min fps from qsync-min-fps-list
+	 * @display: Pointer to private display structure
+	 * @mode_fps: Fps value in dfps list
+	 * Returns: Qsync min fps value on success
+	 */
+	int (*get_qsync_min_fps)(void *display, u32 mode_fps);
 };
 
 /**
@@ -470,10 +478,20 @@ struct sde_connector {
 	u32 bl_scale_sv;
 	u32 unset_bl_level;
 	bool allow_bl_update;
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
+	struct workqueue_struct *update_bl_workq;
+	struct work_struct update_bl_work;
+#endif
 
 	u32 qsync_mode;
 	bool qsync_updated;
-
+#ifdef OPLUS_FEATURE_ADFR
+	u32 qsync_dynamic_min_fps;
+	/* store the min fps value for next window setting */
+	u32 qsync_curr_dynamic_min_fps;
+	/* deferred min fps window setting status */
+	u32 qsync_deferred_window_status;
+#endif /* OPLUS_FEATURE_ADFR */
 	bool colorspace_updated;
 
 	bool last_cmd_tx_sts;
@@ -518,6 +536,16 @@ struct sde_connector {
  */
 #define sde_connector_get_qsync_mode(C) \
 	((C) ? to_sde_connector((C))->qsync_mode : 0)
+
+#ifdef OPLUS_FEATURE_ADFR
+/**
+ * sde_connector_get_qsync_dynamic_min_fps - get sde connector's qsync_dynamic_min_fps
+ * @C: Pointer to drm connector structure
+ * Returns: Current cached qsync_dynamic_min_fps for given connector
+ */
+#define sde_connector_get_qsync_dynamic_min_fps(C)                             \
+	((C) ? to_sde_connector((C))->qsync_dynamic_min_fps : 0)
+#endif
 
 /**
  * sde_connector_get_propinfo - get sde connector's property info pointer
@@ -905,30 +933,6 @@ int sde_connector_state_get_mode_info(struct drm_connector_state *conn_state,
 	struct msm_mode_info *mode_info);
 
 /**
- * sde_connector_state_get_topology - get topology from given connector state
- * conn_state: Pointer to the DRM connector state object
- * topology: Pointer to store topology info of the display
- * Returns: 0 on success, negative errno on failure
- */
-static inline int sde_connector_state_get_topology(
-		struct drm_connector_state *conn_state,
-		struct msm_display_topology *topology)
-{
-	struct sde_connector_state *sde_conn_state = NULL;
-
-	if (!conn_state || !topology) {
-		SDE_ERROR("invalid arguments conn_state %d, topology %d\n",
-				!conn_state, !topology);
-		return -EINVAL;
-	}
-
-	sde_conn_state = to_sde_connector_state(conn_state);
-	memcpy(topology, &sde_conn_state->mode_info.topology,
-			sizeof(struct msm_display_topology));
-	return 0;
-}
-
-/**
 * sde_connector_get_mode_info - retrieve mode info for given mode
 * @connector: Pointer to drm connector structure
 * @drm_mode: Display mode set for the display
@@ -986,5 +990,9 @@ int sde_connector_get_panel_vfp(struct drm_connector *connector,
  * @connector: Pointer to DRM connector object
  */
 int sde_connector_esd_status(struct drm_connector *connector);
+
+#ifdef OPLUS_BUG_STABILITY
+int _sde_connector_update_bl_scale_(struct sde_connector *c_conn);
+#endif
 
 #endif /* _SDE_CONNECTOR_H_ */

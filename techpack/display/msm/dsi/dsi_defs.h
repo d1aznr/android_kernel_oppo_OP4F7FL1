@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _DSI_DEFS_H_
@@ -51,6 +51,17 @@
 								##__VA_ARGS__)
 #define DSI_DEBUG(fmt, ...)	DRM_DEV_DEBUG(NULL, "[msm-dsi-debug]: "fmt, \
 								##__VA_ARGS__)
+
+#ifdef OPLUS_BUG_STABILITY
+#include <soc/oplus/system/oplus_mm_kevent_fb.h>
+#define DSI_MM_ERR(fmt, ...)                                                   \
+	do {                                                                   \
+		DRM_DEV_ERROR(NULL, "[msm-dsi-error]: " fmt, ##__VA_ARGS__);   \
+		mm_fb_display_kevent_named(MM_FB_KEY_RATELIMIT_1H, fmt,        \
+					   ##__VA_ARGS__);                     \
+	} while (0)
+#endif /* OPLUS_BUG_STABILITY */
+
 /**
  * enum dsi_pixel_format - DSI pixel formats
  * @DSI_PIXEL_FORMAT_RGB565:
@@ -307,8 +318,105 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SET_POST_TIMING_SWITCH,
 	DSI_CMD_SET_QSYNC_ON,
 	DSI_CMD_SET_QSYNC_OFF,
+#ifdef OPLUS_BUG_STABILITY
+	DSI_CMD_POST_ON_BACKLIGHT,
+	DSI_CMD_AOD_ON,
+	DSI_CMD_AOD_OFF,
+	DSI_CMD_HBM_ON,
+	DSI_CMD_HBM_OFF,
+	DSI_CMD_AOD_HBM_ON,
+	DSI_CMD_AOD_HBM_OFF,
+	DSI_CMD_SEED_MODE0,
+	DSI_CMD_SEED_MODE1,
+	DSI_CMD_SEED_MODE2,
+	DSI_CMD_SEED_MODE3,
+	DSI_CMD_SEED_MODE4,
+	DSI_CMD_SEED_MODE0_SWITCH,
+	DSI_CMD_SEED_MODE1_SWITCH,
+	DSI_CMD_SEED_MODE2_SWITCH,
+	DSI_CMD_SEED_MODE0_DC_SWITCH,
+	DSI_CMD_SEED_MODE1_DC_SWITCH,
+	DSI_CMD_SEED_MODE2_DC_SWITCH,
+	DSI_CMD_SEED_MODE0_DC,
+	DSI_CMD_SEED_MODE1_DC,
+	DSI_CMD_SEED_MODE2_DC,
+	DSI_CMD_SEED_OFF,
+	DSI_CMD_NORMAL_HBM_ON,
+	DSI_CMD_AOD_HIGH_LIGHT_MODE,
+	DSI_CMD_AOD_LOW_LIGHT_MODE,
+	DSI_CMD_SPR_MODE0,
+	DSI_CMD_SPR_MODE1,
+	DSI_CMD_SPR_MODE2,
+	DSI_CMD_DATA_DIMMING_ON,
+	DSI_CMD_DATA_DIMMING_OFF,
+	DSI_CMD_OSC_CLK_MODEO0,
+	DSI_CMD_OSC_CLK_MODEO1,
+	DSI_CMD_OSC_CLK_MODEO2,
+	DSI_CMD_OSC_CLK_MODEO3,
+	DSI_CMD_FAILSAFE_ON,
+	DSI_CMD_FAILSAFE_OFF,
+	DSI_CMD_SEED_ENTER,
+	DSI_CMD_SEED_EXIT,
+	DSI_CMD_SET_PANEL_ID1,
+	DSI_CMD_READ_SAMSUNG_PANEL_REGISTER_ON,
+	DSI_CMD_READ_SAMSUNG_PANEL_REGISTER_OFF,
+	DSI_CMD_MCA_ON,
+	DSI_CMD_MCA_OFF,
+	DSI_CMD_LOADING_EFFECT_MODE1,
+	DSI_CMD_LOADING_EFFECT_MODE2,
+	DSI_CMD_LOADING_EFFECT_OFF,
+	DSI_CMD_HBM_ENTER_SWITCH,
+	DSI_CMD_HBM_ENTER1_SWITCH,
+	DSI_CMD_HBM_ENTER2_SWITCH,
+	DSI_CMD_HBM_EXIT_SWITCH,
+	DSI_CMD_HBM_EXIT1_SWITCH,
+	DSI_CMD_HBM_EXIT2_SWITCH,
+	DSI_CMD_HBM_AOR_RESTORE,
+	DSI_CMD_SET_LP1_PVT, /*DSI_CMD_SET_LP1*/
+	DSI_CMD_SET_NOLP_PVT, /*DSI_CMD_SET_NOLP*/
+	DSI_CMD_AOD_HBM_ON_PVT, /*DSI_CMD_AOD_HBM_ON*/
+	DSI_CMD_AOD_HBM_OFF_PVT, /*DSI_CMD_AOD_HBM_OFF*/
+	DSI_CMD_DLY_OFF,
+	DSI_CMD_SET_REGISTER_READ,
+	DSI_CMD_SET_LEVEL2_KEY_ENABLE,
+	DSI_CMD_SET_LEVEL2_KEY_DISABLE,
+	DSI_CMD_FPS_CHANGE,
+	DSI_CMD_CABC_OFF,
+	DSI_CMD_CABC_MODE1,
+	DSI_CMD_CABC_MODE2,
+	DSI_CMD_CABC_MODE3,
+	DSI_GAMMA_NOMAL_COMMAND,
+	DSI_GAMMA_LOWBL_COMMAND,
+	/* add for optimizing the display effect under low backlight brightness */
+	DSI_CMD_DIMMING_GAMMA,
+	DSI_CMD_SET_FPS60,
+	DSI_CMD_SET_FPS120,
+#if defined(OPLUS_FEATURE_PXLW_IRIS5)
+	DSI_CMD_SET_ABYP,
+#endif
+#endif
+
+#ifdef OPLUS_FEATURE_ADFR
+	DSI_CMD_QSYNC_MIN_FPS_0,
+	DSI_CMD_QSYNC_MIN_FPS_1,
+	DSI_CMD_QSYNC_MIN_FPS_2,
+	DSI_CMD_QSYNC_MIN_FPS_3,
+	DSI_CMD_QSYNC_MIN_FPS_4,
+	DSI_CMD_QSYNC_MIN_FPS_5,
+	DSI_CMD_QSYNC_MIN_FPS_6,
+	DSI_CMD_QSYNC_MIN_FPS_7,
+	DSI_CMD_QSYNC_MIN_FPS_8,
+	DSI_CMD_QSYNC_MIN_FPS_9,
+	DSI_CMD_FAKEFRAME,
+	DSI_CMD_ADFR_PRE_SWITCH,
+#endif
+
 	DSI_CMD_SET_MAX
 };
+
+#ifdef OPLUS_FEATURE_ADFR
+#define DSI_CMD_QSYNC_MIN_FPS_COUNTS 10
+#endif
 
 /**
  * enum dsi_cmd_set_state - command set state
@@ -417,7 +525,6 @@ struct dsi_panel_cmd_set {
  * @mdp_transfer_time_us:   Specifies the mdp transfer time for command mode
  *                    panels in microseconds.
  * @dsi_transfer_time_us:   Specifies dsi transfer time for command mode.
- * @fsc_mode:         Panel FSC (Field sequential coloring) Mode status.
  * @dsc_enabled:      DSC compression enabled.
  * @dsc:              DSC compression configuration.
  * @roi_caps:         Panel ROI capabilities.
@@ -441,7 +548,6 @@ struct dsi_mode_info {
 	u64 min_dsi_clk_hz;
 	u32 mdp_transfer_time_us;
 	u32 dsi_transfer_time_us;
-	bool fsc_mode;
 	bool dsc_enabled;
 	struct msm_display_dsc_info *dsc;
 	struct msm_roi_caps roi_caps;
@@ -481,6 +587,8 @@ struct dsi_split_link_config {
  * @t_clk_pre:           Number of byte clock cycles that the high spped clock
  *                       shall be driven prior to data lane transitions from LP
  *                       to HS mode.
+ * @t_clk_pre_extend:    Increment t_clk_pre counter by 2 byteclk if set to
+ *                       true, otherwise increment by 1 byteclk.
  * @ignore_rx_eot:       Ignore Rx EOT packets if set to true.
  * @append_tx_eot:       Append EOT packets for forward transmissions if set to
  *                       true.
@@ -507,6 +615,7 @@ struct dsi_host_common_cfg {
 	bool bit_swap_blue;
 	u32 t_clk_post;
 	u32 t_clk_pre;
+	bool t_clk_pre_extend;
 	bool ignore_rx_eot;
 	bool append_tx_eot;
 	bool ext_bridge_mode;
@@ -569,7 +678,7 @@ struct dsi_cmd_engine_cfg {
  * @common_config:         Host configuration common to both Video and Cmd mode.
  * @video_engine:          Video engine configuration if panel is in video mode.
  * @cmd_engine:            Cmd engine configuration if panel is in cmd mode.
- * @esc_clk_rate_khz:      Esc clock frequency in Hz.
+ * @esc_clk_rate_hz:      Esc clock frequency in Hz.
  * @bit_clk_rate_hz:       Bit clock frequency in Hz.
  * @bit_clk_rate_hz_override: DSI bit clk rate override from dt/sysfs.
  * @video_timing:          Video timing information of a frame.
@@ -625,6 +734,20 @@ struct dsi_display_mode_priv_info {
 	struct msm_display_dsc_info dsc;
 	bool dsc_enabled;
 	struct msm_roi_caps roi_caps;
+#ifdef OPLUS_BUG_STABILITY
+	int fod_on_vblank;
+	int fod_off_vblank;
+#endif /* OPLUS_BUG_STABILITY */
+
+#ifdef OPLUS_FEATURE_ADFR
+	u32 qsync_min_fps_sets_size;
+	u32 qsync_min_fps_sets[DSI_CMD_QSYNC_MIN_FPS_COUNTS];
+	u32 current_qsync_mode;
+	// fakeframe_config: 0st Bit:firsttime 1st Bit:secondtime, 1:enable 0:disable
+	// for example, 3 mean both first and second time should send fake frame
+	u32 fakeframe_config;
+	u32 deferred_fakeframe_time;
+#endif
 };
 
 /**
@@ -633,13 +756,18 @@ struct dsi_display_mode_priv_info {
  * @pixel_clk_khz:  Pixel clock in Khz.
  * @dsi_mode_flags: Flags to signal other drm components via private flags
  * @panel_mode:      Panel mode
+ * @is_preferred:   Is mode preferred
  * @priv_info:      Mode private info
  */
 struct dsi_display_mode {
 	struct dsi_mode_info timing;
 	u32 pixel_clk_khz;
 	u32 dsi_mode_flags;
+#ifdef OPLUS_FEATURE_ADFR
+	u32 vsync_source;
+#endif /*OPLUS_FEATURE_ADFR*/
 	enum dsi_op_mode panel_mode;
+	bool is_preferred;
 	struct dsi_display_mode_priv_info *priv_info;
 };
 
