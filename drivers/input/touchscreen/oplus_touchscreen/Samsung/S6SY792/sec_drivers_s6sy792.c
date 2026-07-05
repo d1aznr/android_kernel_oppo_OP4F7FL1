@@ -1825,6 +1825,7 @@ static int sec_mode_switch(void *chip_data, work_mode mode, bool flag)
 
 	switch (mode) {
 	case MODE_NORMAL:
+        sec_enable_black_gesture(chip_info, false);
 		ret = 0;
 		break;
 
