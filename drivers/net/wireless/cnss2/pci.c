@@ -74,7 +74,7 @@ static DEFINE_SPINLOCK(time_sync_lock);
 #define POWER_ON_RETRY_DELAY_MS			200
 
 #define LINK_TRAINING_RETRY_MAX_TIMES		3
-#define LINK_TRAINING_RETRY_DELAY_MS		500
+#define LINK_TRAINING_RETRY_DELAY_MS 500
 
 #define HANG_DATA_LENGTH		384
 #define HST_HANG_DATA_OFFSET		((3 * 1024 * 1024) - HANG_DATA_LENGTH)
@@ -989,6 +989,17 @@ int cnss_pci_link_down(struct device *dev)
 		cnss_pr_err("pci_priv is NULL\n");
 		return -EINVAL;
 	}
+
+	plat_priv = pci_priv->plat_priv;
+	if (!plat_priv) {
+		cnss_pr_err("plat_priv is NULL\n");
+		return -ENODEV;
+	}
+
+	if (pci_priv->drv_connected_last &&
+	    of_property_read_bool(plat_priv->plat_dev->dev.of_node,
+				  "cnss-enable-self-recovery"))
+		plat_priv->ctrl_params.quirks |= BIT(LINK_DOWN_SELF_RECOVERY);
 
 	plat_priv = pci_priv->plat_priv;
 	if (!plat_priv) {
@@ -2393,6 +2404,7 @@ int cnss_wlan_register_driver(struct cnss_wlan_driver *driver_ops)
 	struct cnss_pci_data *pci_priv;
 	unsigned int timeout;
 	struct cnss_cal_info *cal_info;
+	u16 wlan_driver_delay_time = 1000;
 
 	if (!plat_priv) {
 		cnss_pr_err("plat_priv is NULL\n");
@@ -2448,6 +2460,9 @@ int cnss_wlan_register_driver(struct cnss_wlan_driver *driver_ops)
 	}
 
 register_driver:
+	cnss_pr_dbg("Delay %dms before probe WLAN driver\n",
+		    wlan_driver_delay_time);
+	msleep(wlan_driver_delay_time);
 	reinit_completion(&plat_priv->power_up_complete);
 	ret = cnss_driver_event_post(plat_priv,
 				     CNSS_DRIVER_EVENT_REGISTER_DRIVER,

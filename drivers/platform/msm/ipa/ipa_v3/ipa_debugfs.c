@@ -1233,7 +1233,8 @@ static ssize_t ipa3_read_stats(struct file *file, char __user *ubuf,
 	for (i = 0; i < ipa3_ctx->ipa_num_pipes; i++)
 		connect |= (ipa3_ctx->ep[i].valid << i);
 
-	nbytes = scnprintf(dbg_buff, IPA_MAX_MSG_LEN,
+	nbytes = scnprintf(
+		dbg_buff, IPA_MAX_MSG_LEN,
 		"sw_tx=%u\n"
 		"hw_tx=%u\n"
 		"tx_non_linear=%u\n"
@@ -1252,24 +1253,18 @@ static ssize_t ipa3_read_stats(struct file *file, char __user *ubuf,
 		"flow_disable=%u\n"
 		"rx_page_drop_cnt=%u\n"
 		"zero_len_frag_pkt_cnt=%u\n",
-		ipa3_ctx->stats.tx_sw_pkts,
-		ipa3_ctx->stats.tx_hw_pkts,
-		ipa3_ctx->stats.tx_non_linear,
-		ipa3_ctx->stats.tx_pkts_compl,
-		ipa3_ctx->stats.rx_pkts,
-		ipa3_ctx->stats.stat_compl,
-		ipa3_ctx->stats.aggr_close,
+		"lower_order=%u\n", ipa3_ctx->stats.tx_sw_pkts,
+		ipa3_ctx->stats.tx_hw_pkts, ipa3_ctx->stats.tx_non_linear,
+		ipa3_ctx->stats.tx_pkts_compl, ipa3_ctx->stats.rx_pkts,
+		ipa3_ctx->stats.stat_compl, ipa3_ctx->stats.aggr_close,
 		ipa3_ctx->stats.wan_aggr_close,
-		atomic_read(&ipa3_ctx->ipa3_active_clients.cnt),
-		connect,
-		ipa3_ctx->stats.wan_rx_empty,
-		ipa3_ctx->stats.wan_repl_rx_empty,
-		ipa3_ctx->stats.lan_rx_empty,
-		ipa3_ctx->stats.lan_repl_rx_empty,
-		ipa3_ctx->stats.flow_enable,
-		ipa3_ctx->stats.flow_disable,
+		atomic_read(&ipa3_ctx->ipa3_active_clients.cnt), connect,
+		ipa3_ctx->stats.wan_rx_empty, ipa3_ctx->stats.wan_repl_rx_empty,
+		ipa3_ctx->stats.lan_rx_empty, ipa3_ctx->stats.lan_repl_rx_empty,
+		ipa3_ctx->stats.flow_enable, ipa3_ctx->stats.flow_disable,
 		ipa3_ctx->stats.rx_page_drop_cnt,
-		ipa3_ctx->stats.zero_len_frag_pkt_cnt);
+		ipa3_ctx->stats.zero_len_frag_pkt_cnt,
+		ipa3_ctx->stats.lower_order);
 	cnt += nbytes;
 
 	for (i = 0; i < IPAHAL_PKT_STATUS_EXCEPTION_MAX; i++) {

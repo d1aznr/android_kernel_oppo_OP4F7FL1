@@ -134,9 +134,17 @@ static struct sysrq_key_op sysrq_unraw_op = {
 
 static void sysrq_handle_crash(int key)
 {
+	struct task_struct *tsk = NULL;
+
 	/* release the RCU read lock before crashing */
 	rcu_read_unlock();
-
+#ifdef OPLUS_BUG_STABILITY
+	/* modify for show the murderer*/
+	tsk = current->group_leader;
+	pr_info("BUG:%s:%d call sysrq-trigger, GroupLeader is %s:%d\n",
+		current->comm, task_pid_nr(current), tsk->comm,
+		task_pid_nr(tsk));
+#endif /*OPLUS_BUG_STABILITY*/
 	panic("sysrq triggered crash\n");
 }
 static struct sysrq_key_op sysrq_crash_op = {
@@ -158,7 +166,20 @@ static struct sysrq_key_op sysrq_reboot_op = {
 	.action_msg	= "Resetting",
 	.enable_mask	= SYSRQ_ENABLE_BOOT,
 };
+#ifdef CONFIG_OPLUS_FEATURE_PANIC_FLUSH
+extern int panic_flush_device_cache(int timeout);
+static void sysrq_handle_flush(int key)
+{
+	panic_flush_device_cache(0);
+}
 
+static struct sysrq_key_op sysrq_flush_op = {
+	.handler = sysrq_handle_flush,
+	.help_msg = "flush(y)",
+	.action_msg = "Emergency Flush",
+	.enable_mask = SYSRQ_ENABLE_SYNC,
+};
+#endif
 static void sysrq_handle_sync(int key)
 {
 	emergency_sync();
@@ -428,62 +449,66 @@ static struct sysrq_key_op sysrq_unrt_op = {
 static DEFINE_SPINLOCK(sysrq_key_table_lock);
 
 static struct sysrq_key_op *sysrq_key_table[36] = {
-	&sysrq_loglevel_op,		/* 0 */
-	&sysrq_loglevel_op,		/* 1 */
-	&sysrq_loglevel_op,		/* 2 */
-	&sysrq_loglevel_op,		/* 3 */
-	&sysrq_loglevel_op,		/* 4 */
-	&sysrq_loglevel_op,		/* 5 */
-	&sysrq_loglevel_op,		/* 6 */
-	&sysrq_loglevel_op,		/* 7 */
-	&sysrq_loglevel_op,		/* 8 */
-	&sysrq_loglevel_op,		/* 9 */
+	&sysrq_loglevel_op, /* 0 */
+	&sysrq_loglevel_op, /* 1 */
+	&sysrq_loglevel_op, /* 2 */
+	&sysrq_loglevel_op, /* 3 */
+	&sysrq_loglevel_op, /* 4 */
+	&sysrq_loglevel_op, /* 5 */
+	&sysrq_loglevel_op, /* 6 */
+	&sysrq_loglevel_op, /* 7 */
+	&sysrq_loglevel_op, /* 8 */
+	&sysrq_loglevel_op, /* 9 */
 
 	/*
 	 * a: Don't use for system provided sysrqs, it is handled specially on
 	 * sparc and will never arrive.
 	 */
-	NULL,				/* a */
-	&sysrq_reboot_op,		/* b */
-	&sysrq_crash_op,		/* c */
-	&sysrq_showlocks_op,		/* d */
-	&sysrq_term_op,			/* e */
-	&sysrq_moom_op,			/* f */
+	NULL, /* a */
+	&sysrq_reboot_op, /* b */
+	&sysrq_crash_op, /* c */
+	&sysrq_showlocks_op, /* d */
+	&sysrq_term_op, /* e */
+	&sysrq_moom_op, /* f */
 	/* g: May be registered for the kernel debugger */
-	NULL,				/* g */
-	NULL,				/* h - reserved for help */
-	&sysrq_kill_op,			/* i */
+	NULL, /* g */
+	NULL, /* h - reserved for help */
+	&sysrq_kill_op, /* i */
 #ifdef CONFIG_BLOCK
-	&sysrq_thaw_op,			/* j */
+	&sysrq_thaw_op, /* j */
 #else
-	NULL,				/* j */
+	NULL, /* j */
 #endif
-	&sysrq_SAK_op,			/* k */
+	&sysrq_SAK_op, /* k */
 #ifdef CONFIG_SMP
-	&sysrq_showallcpus_op,		/* l */
+	&sysrq_showallcpus_op, /* l */
 #else
-	NULL,				/* l */
+	NULL, /* l */
 #endif
-	&sysrq_showmem_op,		/* m */
-	&sysrq_unrt_op,			/* n */
+	&sysrq_showmem_op, /* m */
+	&sysrq_unrt_op, /* n */
 	/* o: This will often be registered as 'Off' at init time */
-	NULL,				/* o */
-	&sysrq_showregs_op,		/* p */
-	&sysrq_show_timers_op,		/* q */
-	&sysrq_unraw_op,		/* r */
-	&sysrq_sync_op,			/* s */
-	&sysrq_showstate_op,		/* t */
-	&sysrq_mountro_op,		/* u */
+	NULL, /* o */
+	&sysrq_showregs_op, /* p */
+	&sysrq_show_timers_op, /* q */
+	&sysrq_unraw_op, /* r */
+	&sysrq_sync_op, /* s */
+	&sysrq_showstate_op, /* t */
+	&sysrq_mountro_op, /* u */
 	/* v: May be registered for frame buffer console restore */
-	NULL,				/* v */
-	&sysrq_showstate_blocked_op,	/* w */
+	NULL, /* v */
+	&sysrq_showstate_blocked_op, /* w */
 	/* x: May be registered on mips for TLB dump */
 	/* x: May be registered on ppc/powerpc for xmon */
 	/* x: May be registered on sparc64 for global PMU dump */
-	NULL,				/* x */
+	NULL, /* x */
 	/* y: May be registered on sparc64 for global register dump */
-	NULL,				/* y */
-	&sysrq_ftrace_dump_op,		/* z */
+#ifdef CONFIG_OPLUS_FEATURE_PANIC_FLUSH
+	&sysrq_flush_op, /* y */
+#else
+	NULL, /* y */
+#endif
+	&sysrq_ftrace_dump_op, /* z */
 };
 
 /* key2index calculation, -1 on invalid index */
