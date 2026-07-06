@@ -23,6 +23,10 @@
 #include <linux/freezer.h>
 #include <linux/page_owner.h>
 #include <linux/psi.h>
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+#include <linux/mm.h>
+#endif
 #include "internal.h"
 
 #ifdef CONFIG_COMPACTION
@@ -984,7 +988,7 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		VM_BUG_ON_PAGE(PageCompound(page), page);
 
 		/* Successfully isolated */
-		del_page_from_lru_list(page, lruvec, page_lru(page));
+		del_page_from_lru_list(page, lruvec);
 		inc_node_page_state(page,
 				NR_ISOLATED_ANON + page_is_file_cache(page));
 
@@ -1282,6 +1286,10 @@ fast_isolate_freepages(struct compact_control *cc)
 	struct page *page = NULL;
 	bool scan_start = false;
 	int order;
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+	int flc = 0;
+#endif
 
 	/* Full compaction passes in a negative order */
 	if (cc->order <= 0)
@@ -1312,84 +1320,106 @@ fast_isolate_freepages(struct compact_control *cc)
 	 * order to search after a previous failure
 	 */
 	cc->search_order = min_t(unsigned int, cc->order - 1, cc->search_order);
-
-	for (order = cc->search_order;
-	     !page && order >= 0;
-	     order = next_search_order(cc, order)) {
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+	for (flc = 0; flc < FREE_AREA_COUNTS; flc++) {
+#endif
+		for (order = cc->search_order; !page && order >= 0;
+		     order = next_search_order(cc, order)) {
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+			struct free_area *area =
+				&cc->zone->free_area[flc][order];
+#else
 		struct free_area *area = &cc->zone->free_area[order];
-		struct list_head *freelist;
-		struct page *freepage;
-		unsigned long flags;
-		unsigned int order_scanned = 0;
+#endif
+			struct list_head *freelist;
+			struct page *freepage;
+			unsigned long flags;
+			unsigned int order_scanned = 0;
 
-		if (!area->nr_free)
-			continue;
+			if (!area->nr_free)
+				continue;
 
-		spin_lock_irqsave(&cc->zone->lock, flags);
-		freelist = &area->free_list[MIGRATE_MOVABLE];
-		list_for_each_entry_reverse(freepage, freelist, lru) {
-			unsigned long pfn;
+			spin_lock_irqsave(&cc->zone->lock, flags);
+			freelist = &area->free_list[MIGRATE_MOVABLE];
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+			if (list_empty(freelist)) {
+				spin_unlock_irqrestore(&cc->zone->lock, flags);
+				continue;
+			}
+#endif
 
-			order_scanned++;
-			nr_scanned++;
-			pfn = page_to_pfn(freepage);
+			list_for_each_entry_reverse (freepage, freelist, lru) {
+				unsigned long pfn;
 
-			if (pfn >= highest)
-				highest = pageblock_start_pfn(pfn);
+				order_scanned++;
+				nr_scanned++;
+				pfn = page_to_pfn(freepage);
 
-			if (pfn >= low_pfn) {
-				cc->fast_search_fail = 0;
-				cc->search_order = order;
-				page = freepage;
-				break;
+				if (pfn >= highest)
+					highest = pageblock_start_pfn(pfn);
+
+				if (pfn >= low_pfn) {
+					cc->fast_search_fail = 0;
+					cc->search_order = order;
+					page = freepage;
+					break;
+				}
+
+				if (pfn >= min_pfn && pfn > high_pfn) {
+					high_pfn = pfn;
+
+					/* Shorten the scan if a candidate is found */
+					limit >>= 1;
+				}
+
+				if (order_scanned >= limit)
+					break;
 			}
 
-			if (pfn >= min_pfn && pfn > high_pfn) {
-				high_pfn = pfn;
+			/* Use a minimum pfn if a preferred one was not found */
+			if (!page && high_pfn) {
+				page = pfn_to_page(high_pfn);
 
-				/* Shorten the scan if a candidate is found */
-				limit >>= 1;
+				/* Update freepage for the list reorder below */
+				freepage = page;
 			}
 
-			if (order_scanned >= limit)
-				break;
-		}
+			/* Reorder to so a future search skips recent pages */
+			move_freelist_head(freelist, freepage);
 
-		/* Use a minimum pfn if a preferred one was not found */
-		if (!page && high_pfn) {
-			page = pfn_to_page(high_pfn);
-
-			/* Update freepage for the list reorder below */
-			freepage = page;
-		}
-
-		/* Reorder to so a future search skips recent pages */
-		move_freelist_head(freelist, freepage);
-
-		/* Isolate the page if available */
-		if (page) {
-			if (__isolate_free_page(page, order)) {
-				set_page_private(page, order);
-				nr_isolated = 1 << order;
-				cc->nr_freepages += nr_isolated;
-				list_add_tail(&page->lru, &cc->freepages);
-				count_compact_events(COMPACTISOLATED, nr_isolated);
-			} else {
-				/* If isolation fails, abort the search */
-				order = cc->search_order + 1;
-				page = NULL;
+			/* Isolate the page if available */
+			if (page) {
+				if (__isolate_free_page(page, order)) {
+					set_page_private(page, order);
+					nr_isolated = 1 << order;
+					cc->nr_freepages += nr_isolated;
+					list_add_tail(&page->lru,
+						      &cc->freepages);
+					count_compact_events(COMPACTISOLATED,
+							     nr_isolated);
+				} else {
+					/* If isolation fails, abort the search */
+					order = cc->search_order + 1;
+					page = NULL;
+				}
 			}
-		}
 
-		spin_unlock_irqrestore(&cc->zone->lock, flags);
+			spin_unlock_irqrestore(&cc->zone->lock, flags);
 
-		/*
+			/*
 		 * Smaller scan on next order so the total scan ig related
 		 * to freelist_scan_limit.
 		 */
-		if (order_scanned >= limit)
-			limit = min(1U, limit >> 1);
+			if (order_scanned >= limit)
+				limit = min(1U, limit >> 1);
+		}
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
 	}
+#endif
 
 	if (!page) {
 		cc->fast_search_fail++;
@@ -1629,6 +1659,10 @@ static unsigned long fast_find_migrateblock(struct compact_control *cc)
 	unsigned long pfn = cc->migrate_pfn;
 	unsigned long high_pfn;
 	int order;
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+	int flc = 0;
+#endif
 
 	/* Skip hints are relied on to avoid repeats on the fast search */
 	if (cc->ignore_skip_hint)
@@ -1670,57 +1704,79 @@ static unsigned long fast_find_migrateblock(struct compact_control *cc)
 		distance >>= 2;
 	high_pfn = pageblock_start_pfn(cc->migrate_pfn + distance);
 
-	for (order = cc->order - 1;
-	     order >= PAGE_ALLOC_COSTLY_ORDER && pfn == cc->migrate_pfn && nr_scanned < limit;
-	     order--) {
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+	for (flc = 0; flc < FREE_AREA_COUNTS; flc++) {
+#endif
+		for (order = cc->order - 1;
+		     order >= PAGE_ALLOC_COSTLY_ORDER &&
+		     pfn == cc->migrate_pfn && nr_scanned < limit;
+		     order--) {
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+			struct free_area *area =
+				&cc->zone->free_area[flc][order];
+#else
 		struct free_area *area = &cc->zone->free_area[order];
-		struct list_head *freelist;
-		unsigned long flags;
-		struct page *freepage;
+#endif
+			struct list_head *freelist;
+			unsigned long flags;
+			struct page *freepage;
 
-		if (!area->nr_free)
-			continue;
+			if (!area->nr_free)
+				continue;
 
-		spin_lock_irqsave(&cc->zone->lock, flags);
-		freelist = &area->free_list[MIGRATE_MOVABLE];
-		list_for_each_entry(freepage, freelist, lru) {
-			unsigned long free_pfn;
+			spin_lock_irqsave(&cc->zone->lock, flags);
+			freelist = &area->free_list[MIGRATE_MOVABLE];
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+			if (list_empty(freelist)) {
+				spin_unlock_irqrestore(&cc->zone->lock, flags);
+				continue;
+			}
+#endif
+			list_for_each_entry (freepage, freelist, lru) {
+				unsigned long free_pfn;
 
-			nr_scanned++;
-			free_pfn = page_to_pfn(freepage);
-			if (free_pfn < high_pfn) {
-				/*
+				nr_scanned++;
+				free_pfn = page_to_pfn(freepage);
+				if (free_pfn < high_pfn) {
+					/*
 				 * Avoid if skipped recently. Ideally it would
 				 * move to the tail but even safe iteration of
 				 * the list assumes an entry is deleted, not
 				 * reordered.
 				 */
-				if (get_pageblock_skip(freepage)) {
-					if (list_is_last(freelist, &freepage->lru))
-						break;
+					if (get_pageblock_skip(freepage)) {
+						if (list_is_last(freelist,
+								 &freepage->lru))
+							break;
 
-					continue;
+						continue;
+					}
+
+					/* Reorder to so a future search skips recent pages */
+					move_freelist_tail(freelist, freepage);
+
+					update_fast_start_pfn(cc, free_pfn);
+					pfn = pageblock_start_pfn(free_pfn);
+					cc->fast_search_fail = 0;
+					set_pageblock_skip(freepage);
+					break;
 				}
 
-				/* Reorder to so a future search skips recent pages */
-				move_freelist_tail(freelist, freepage);
-
-				update_fast_start_pfn(cc, free_pfn);
-				pfn = pageblock_start_pfn(free_pfn);
-				cc->fast_search_fail = 0;
-				set_pageblock_skip(freepage);
-				break;
+				if (nr_scanned >= limit) {
+					cc->fast_search_fail++;
+					move_freelist_tail(freelist, freepage);
+					break;
+				}
 			}
-
-			if (nr_scanned >= limit) {
-				cc->fast_search_fail++;
-				move_freelist_tail(freelist, freepage);
-				break;
-			}
+			spin_unlock_irqrestore(&cc->zone->lock, flags);
 		}
-		spin_unlock_irqrestore(&cc->zone->lock, flags);
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
 	}
-
+#endif
 	cc->total_migrate_scanned += nr_scanned;
 
 	/*
@@ -1852,6 +1908,10 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 	unsigned int order;
 	const int migratetype = cc->migratetype;
 	int ret;
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+	int flc = 0;
+#endif
 
 	/* Compaction run completes if the migrate and free scanner meet */
 	if (compact_scanners_met(cc)) {
@@ -1887,13 +1947,23 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 
 	/* Direct compactor: Is a suitable page free? */
 	ret = COMPACT_NO_SUITABLE_PAGE;
-	for (order = cc->order; order < MAX_ORDER; order++) {
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+	for (flc = 0; flc < FREE_AREA_COUNTS; flc++) {
+#endif
+		for (order = cc->order; order < MAX_ORDER; order++) {
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+			struct free_area *area =
+				&cc->zone->free_area[flc][order];
+#else
 		struct free_area *area = &cc->zone->free_area[order];
-		bool can_steal;
+#endif
+			bool can_steal;
 
-		/* Job done if page is free of the right migratetype */
-		if (!list_empty(&area->free_list[migratetype]))
-			return COMPACT_SUCCESS;
+			/* Job done if page is free of the right migratetype */
+			if (!list_empty(&area->free_list[migratetype]))
+				return COMPACT_SUCCESS;
 
 #ifdef CONFIG_CMA
 		/* MIGRATE_MOVABLE can fallback on MIGRATE_CMA */
@@ -1930,7 +2000,10 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 			break;
 		}
 	}
-
+#if defined(OPLUS_FEATURE_MULTI_FREEAREA) &&                                   \
+	defined(CONFIG_PHYSICAL_ANTI_FRAGMENTATION)
+	}
+#endif
 	if (cc->contended || fatal_signal_pending(current))
 		ret = COMPACT_CONTENDED;
 
