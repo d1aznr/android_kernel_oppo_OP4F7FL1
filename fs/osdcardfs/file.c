@@ -23,8 +23,8 @@
 #include <linux/backing-dev.h>
 #endif
 
-static ssize_t sdcardfs_read(struct file *file, char __user *buf,
-			   size_t count, loff_t *ppos)
+static ssize_t sdcardfs_read(struct file *file, char __user *buf, size_t count,
+			     loff_t *ppos)
 {
 	int err;
 	struct file *lower_file;
@@ -57,7 +57,7 @@ static ssize_t sdcardfs_read(struct file *file, char __user *buf,
 }
 
 static ssize_t sdcardfs_write(struct file *file, const char __user *buf,
-			    size_t count, loff_t *ppos)
+			      size_t count, loff_t *ppos)
 {
 	int err;
 	struct file *lower_file;
@@ -96,14 +96,14 @@ static int sdcardfs_readdir(struct file *file, struct dir_context *ctx)
 	lower_file->f_pos = file->f_pos;
 	err = iterate_dir(lower_file, ctx);
 	file->f_pos = lower_file->f_pos;
-	if (err >= 0)		/* copy the atime */
+	if (err >= 0) /* copy the atime */
 		fsstack_copy_attr_atime(d_inode(dentry),
 					file_inode(lower_file));
 	return err;
 }
 
 static long sdcardfs_unlocked_ioctl(struct file *file, unsigned int cmd,
-				  unsigned long arg)
+				    unsigned long arg)
 {
 	long err = -ENOTTY;
 	struct file *lower_file;
@@ -130,7 +130,7 @@ static long sdcardfs_unlocked_ioctl(struct file *file, unsigned int cmd,
 	/* some ioctls can change inode attributes (EXT2_IOC_SETFLAGS) */
 	if (!err)
 		sdcardfs_copy_and_fix_attrs(file_inode(file),
-				      file_inode(lower_file));
+					    file_inode(lower_file));
 	revert_fsids(saved_cred);
 out:
 	return err;
@@ -138,7 +138,7 @@ out:
 
 #ifdef CONFIG_COMPAT
 static long sdcardfs_compat_ioctl(struct file *file, unsigned int cmd,
-				unsigned long arg)
+				  unsigned long arg)
 {
 	long err = -ENOTTY;
 	struct file *lower_file;
@@ -334,7 +334,7 @@ static int sdcardfs_file_release(struct inode *inode, struct file *file)
 }
 
 static int sdcardfs_fsync(struct file *file, loff_t start, loff_t end,
-			int datasync)
+			  int datasync)
 {
 	int err;
 	struct file *lower_file;
@@ -448,35 +448,35 @@ out:
 }
 
 const struct file_operations sdcardfs_main_fops = {
-	.llseek		= generic_file_llseek,
-	.read		= sdcardfs_read,
-	.write		= sdcardfs_write,
-	.unlocked_ioctl	= sdcardfs_unlocked_ioctl,
+	.llseek = generic_file_llseek,
+	.read = sdcardfs_read,
+	.write = sdcardfs_write,
+	.unlocked_ioctl = sdcardfs_unlocked_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl	= sdcardfs_compat_ioctl,
+	.compat_ioctl = sdcardfs_compat_ioctl,
 #endif
-	.mmap		= sdcardfs_mmap,
-	.open		= sdcardfs_open,
-	.flush		= sdcardfs_flush,
-	.release	= sdcardfs_file_release,
-	.fsync		= sdcardfs_fsync,
-	.fasync		= sdcardfs_fasync,
-	.read_iter	= sdcardfs_read_iter,
-	.write_iter	= sdcardfs_write_iter,
+	.mmap = sdcardfs_mmap,
+	.open = sdcardfs_open,
+	.flush = sdcardfs_flush,
+	.release = sdcardfs_file_release,
+	.fsync = sdcardfs_fsync,
+	.fasync = sdcardfs_fasync,
+	.read_iter = sdcardfs_read_iter,
+	.write_iter = sdcardfs_write_iter,
 };
 
 /* trimmed directory options */
 const struct file_operations sdcardfs_dir_fops = {
-	.llseek		= sdcardfs_file_llseek,
-	.read		= generic_read_dir,
-	.iterate	= sdcardfs_readdir,
-	.unlocked_ioctl	= sdcardfs_unlocked_ioctl,
+	.llseek = sdcardfs_file_llseek,
+	.read = generic_read_dir,
+	.iterate = sdcardfs_readdir,
+	.unlocked_ioctl = sdcardfs_unlocked_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl	= sdcardfs_compat_ioctl,
+	.compat_ioctl = sdcardfs_compat_ioctl,
 #endif
-	.open		= sdcardfs_open,
-	.release	= sdcardfs_file_release,
-	.flush		= sdcardfs_flush,
-	.fsync		= sdcardfs_fsync,
-	.fasync		= sdcardfs_fasync,
+	.open = sdcardfs_open,
+	.release = sdcardfs_file_release,
+	.flush = sdcardfs_flush,
+	.fsync = sdcardfs_fsync,
+	.fasync = sdcardfs_fasync,
 };

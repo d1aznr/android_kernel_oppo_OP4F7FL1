@@ -12,6 +12,7 @@
  * Copyright (c) 2009     Shrikar Archak
  * Copyright (c) 2003-2011 Stony Brook University
  * Copyright (c) 2003-2011 The Research Foundation of SUNY
+ * Copyright (C) 2020 Oplus. All rights reserved.
  *
  * This file is dual licensed.  It may be redistributed and/or modified
  * under the terms of the Apache 2.0 License OR version 2 of the GNU
@@ -41,24 +42,24 @@ enum {
 };
 
 static const match_table_t sdcardfs_tokens = {
-	{Opt_fsuid, "fsuid=%u"},
-	{Opt_fsgid, "fsgid=%u"},
-	{Opt_gid, "gid=%u"},
-	{Opt_debug, "debug"},
-	{Opt_mask, "mask=%u"},
-	{Opt_userid, "userid=%d"},
-	{Opt_multiuser, "multiuser"},
-	{Opt_gid_derivation, "derive_gid"},
-	{Opt_default_normal, "default_normal"},
-	{Opt_unshared_obb, "unshared_obb"},
-	{Opt_reserved_mb, "reserved_mb=%u"},
-	{Opt_nocache, "nocache"},
-	{Opt_err, NULL}
+	{ Opt_fsuid, "fsuid=%u" },
+	{ Opt_fsgid, "fsgid=%u" },
+	{ Opt_gid, "gid=%u" },
+	{ Opt_debug, "debug" },
+	{ Opt_mask, "mask=%u" },
+	{ Opt_userid, "userid=%d" },
+	{ Opt_multiuser, "multiuser" },
+	{ Opt_gid_derivation, "derive_gid" },
+	{ Opt_default_normal, "default_normal" },
+	{ Opt_unshared_obb, "unshared_obb" },
+	{ Opt_reserved_mb, "reserved_mb=%u" },
+	{ Opt_nocache, "nocache" },
+	{ Opt_err, NULL }
 };
 
 static int parse_options(struct super_block *sb, char *options, int silent,
-				int *debug, struct sdcardfs_vfsmount_options *vfsopts,
-				struct sdcardfs_mount_options *opts)
+			 int *debug, struct sdcardfs_vfsmount_options *vfsopts,
+			 struct sdcardfs_mount_options *opts)
 {
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
@@ -143,24 +144,23 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 		/* unknown option */
 		default:
 			if (!silent)
-				pr_err("Unrecognized mount option \"%s\" or missing value", p);
+				pr_err("Unrecognized mount option \"%s\" or missing value",
+				       p);
 			return -EINVAL;
 		}
 	}
 
 	if (*debug) {
 		pr_info("sdcardfs : options - debug:%d\n", *debug);
-		pr_info("sdcardfs : options - uid:%d\n",
-							opts->fs_low_uid);
-		pr_info("sdcardfs : options - gid:%d\n",
-							opts->fs_low_gid);
+		pr_info("sdcardfs : options - uid:%d\n", opts->fs_low_uid);
+		pr_info("sdcardfs : options - gid:%d\n", opts->fs_low_gid);
 	}
 
 	return 0;
 }
 
 int parse_options_remount(struct super_block *sb, char *options, int silent,
-				struct sdcardfs_vfsmount_options *vfsopts)
+			  struct sdcardfs_vfsmount_options *vfsopts)
 {
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
@@ -200,15 +200,18 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 		case Opt_fsuid:
 		case Opt_fsgid:
 		case Opt_reserved_mb:
-			pr_warn("Option \"%s\" can't be changed during remount\n", p);
+			pr_warn("Option \"%s\" can't be changed during remount\n",
+				p);
 		case Opt_gid_derivation:
 			if (!silent)
-				pr_warn("Option \"%s\" can't be changed during remount\n", p);
+				pr_warn("Option \"%s\" can't be changed during remount\n",
+					p);
 			break;
 		/* unknown option */
 		default:
 			if (!silent)
-				pr_err("Unrecognized mount option \"%s\" or missing value", p);
+				pr_err("Unrecognized mount option \"%s\" or missing value",
+				       p);
 			return -EINVAL;
 		}
 	}
@@ -260,7 +263,7 @@ EXPORT_SYMBOL_GPL(sdcardfs_super_list);
  * way anyone can have a reference to the superblock at this point in time.
  */
 static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
-		const char *dev_name, void *raw_data, int silent)
+			       const char *dev_name, void *raw_data, int silent)
 {
 	int err = 0;
 	int debug;
@@ -286,7 +289,8 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 	err = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY,
 			&lower_path);
 	if (err) {
-		pr_err("sdcardfs: error accessing lower directory '%s'\n", dev_name);
+		pr_err("sdcardfs: error accessing lower directory '%s'\n",
+		       dev_name);
 		goto out;
 	}
 
@@ -300,7 +304,8 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 
 	sb_info = sb->s_fs_info;
 	/* parse options */
-	err = parse_options(sb, raw_data, silent, &debug, mnt_opt, &sb_info->options);
+	err = parse_options(sb, raw_data, silent, &debug, mnt_opt,
+			    &sb_info->options);
 	if (err) {
 		pr_err("sdcardfs: invalid options\n");
 		goto out_freesbi;
@@ -364,12 +369,13 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 	mutex_lock(&sdcardfs_super_list_lock);
 	if (sb_info->options.multiuser) {
 		setup_derived_state(d_inode(sb->s_root), PERM_PRE_ROOT,
-				sb_info->options.fs_user_id, AID_ROOT);
+				    sb_info->options.fs_user_id, AID_ROOT);
 		snprintf(sb_info->obbpath_s, PATH_MAX, "%s/obb", dev_name);
 	} else {
 		setup_derived_state(d_inode(sb->s_root), PERM_ROOT,
-				sb_info->options.fs_user_id, AID_ROOT);
-		snprintf(sb_info->obbpath_s, PATH_MAX, "%s/Android/obb", dev_name);
+				    sb_info->options.fs_user_id, AID_ROOT);
+		snprintf(sb_info->obbpath_s, PATH_MAX, "%s/Android/obb",
+			 dev_name);
 	}
 	fixup_tmp_permissions(d_inode(sb->s_root));
 	sb_info->sb = sb;
@@ -380,8 +386,8 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 	fscrypt_register_key_removal_notifier(&sb_info->fscrypt_nb);
 
 	if (!silent)
-		pr_info("sdcardfs: mounted on top of %s type %s\n",
-				dev_name, lower_sb->s_type->name);
+		pr_info("sdcardfs: mounted on top of %s type %s\n", dev_name,
+			lower_sb->s_type->name);
 	goto out; /* all is well */
 
 	/* no longer needed: free_dentry_private_data(sb->s_root); */
@@ -407,32 +413,30 @@ struct sdcardfs_mount_private {
 	void *raw_data;
 };
 
-static int __sdcardfs_fill_super(
-	struct super_block *sb,
-	void *_priv, int silent)
+static int __sdcardfs_fill_super(struct super_block *sb, void *_priv,
+				 int silent)
 {
 	struct sdcardfs_mount_private *priv = _priv;
 
-	return sdcardfs_read_super(priv->mnt,
-		sb, priv->dev_name, priv->raw_data, silent);
+	return sdcardfs_read_super(priv->mnt, sb, priv->dev_name,
+				   priv->raw_data, silent);
 }
 
 static struct dentry *sdcardfs_mount(struct vfsmount *mnt,
-		struct file_system_type *fs_type, int flags,
-			    const char *dev_name, void *raw_data)
+				     struct file_system_type *fs_type,
+				     int flags, const char *dev_name,
+				     void *raw_data)
 {
-	struct sdcardfs_mount_private priv = {
-		.mnt = mnt,
-		.dev_name = dev_name,
-		.raw_data = raw_data
-	};
+	struct sdcardfs_mount_private priv = { .mnt = mnt,
+					       .dev_name = dev_name,
+					       .raw_data = raw_data };
 
-	return mount_nodev(fs_type, flags,
-		&priv, __sdcardfs_fill_super);
+	return mount_nodev(fs_type, flags, &priv, __sdcardfs_fill_super);
 }
 
 static struct dentry *sdcardfs_mount_wrn(struct file_system_type *fs_type,
-		    int flags, const char *dev_name, void *raw_data)
+					 int flags, const char *dev_name,
+					 void *raw_data)
 {
 	WARN(1, "sdcardfs does not support mount. Use mount2.\n");
 	return ERR_PTR(-EINVAL);
@@ -460,13 +464,13 @@ void sdcardfs_kill_sb(struct super_block *sb)
 }
 
 static struct file_system_type sdcardfs_fs_type = {
-	.owner		= THIS_MODULE,
-	.name		= SDCARDFS_NAME,
-	.mount		= sdcardfs_mount_wrn,
-	.mount2		= sdcardfs_mount,
+	.owner = THIS_MODULE,
+	.name = SDCARDFS_NAME,
+	.mount = sdcardfs_mount_wrn,
+	.mount2 = sdcardfs_mount,
 	.alloc_mnt_data = sdcardfs_alloc_mnt_data,
-	.kill_sb	= sdcardfs_kill_sb,
-	.fs_flags	= 0,
+	.kill_sb = sdcardfs_kill_sb,
+	.fs_flags = 0,
 };
 MODULE_ALIAS_FS(SDCARDFS_NAME);
 
@@ -505,10 +509,12 @@ static void __exit exit_sdcardfs_fs(void)
 }
 
 /* Original wrapfs authors */
-MODULE_AUTHOR("Erez Zadok, Filesystems and Storage Lab, Stony Brook University (http://www.fsl.cs.sunysb.edu/)");
+MODULE_AUTHOR(
+	"Erez Zadok, Filesystems and Storage Lab, Stony Brook University (http://www.fsl.cs.sunysb.edu/)");
 
 /* Original sdcardfs authors */
-MODULE_AUTHOR("Woojoong Lee, Daeho Jeong, Kitae Lee, Yeongjin Gil System Memory Lab., Samsung Electronics");
+MODULE_AUTHOR(
+	"Woojoong Lee, Daeho Jeong, Kitae Lee, Yeongjin Gil System Memory Lab., Samsung Electronics");
 
 /* Current maintainer */
 MODULE_AUTHOR("Daniel Rosenberg, Google");
