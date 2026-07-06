@@ -922,11 +922,18 @@ static int qdss_mhi_probe(struct mhi_device *mhi_dev,
 		return ret;
 	}
 
+	drvdata->cdev = cdev_alloc();
+	if (!drvdata->cdev) {
+		ret = -ENOMEM;
+		return ret;
+	}
+
 	ret = alloc_chrdev_region(&dev, baseminor, count, "mhi_qdss");
 	if (ret < 0) {
 		pr_err("alloc_chrdev_region failed %d\n", ret);
 		return ret;
 	}
+	//cdev_init(&drvdata->cdev, &mhidev_fops);
 
 	drvdata->cdev->owner = THIS_MODULE;
 	drvdata->cdev->ops = &mhidev_fops;

@@ -22,6 +22,8 @@
 #include <linux/soc/qcom/smem.h>
 #include <soc/qcom/boot_stats.h>
 
+#include <soc/oplus/system/oppo_project.h>
+
 #define BUILD_ID_LENGTH 32
 #define CHIP_ID_LENGTH 32
 #define SMEM_IMAGE_VERSION_BLOCKS_COUNT 32
@@ -229,168 +231,199 @@ static union {
 /* max socinfo format version supported */
 #define MAX_SOCINFO_FORMAT SOCINFO_VERSION(0, 15)
 
+#ifdef OPLUS_ARCH_EXTENDS
+static char *fake_cpu_id = "SM8150";
+#ifdef CONFIG_ARCH_LITO
+static char *real_cpu_id = "SDM765G 5G";
+#else
+static char *real_cpu_id = "SM8250";
+#endif /*CONFIG_ARCH_LITO*/
+static char *real_cpu_id_20161_models = "SM8250_AC";
+static char *real_cpu_id_20057_20058 = "SDM750G";
+static char *real_cpu_id_20669_20750_20751 = "SDM750G";
+#endif /*OPLUS_ARCH_EXTENDS*/
+
 static struct msm_soc_info cpu_of_id[] = {
-	[0]  = {MSM_CPU_UNKNOWN, "Unknown CPU"},
+	[0] = { MSM_CPU_UNKNOWN, "Unknown CPU" },
 	/* 8960 IDs */
-	[87] = {MSM_CPU_8960, "MSM8960"},
+	[87] = { MSM_CPU_8960, "MSM8960" },
 
 	/* 8064 IDs */
-	[109] = {MSM_CPU_8064, "APQ8064"},
-	[122] = {MSM_CPU_8960, "MSM8960"},
+	[109] = { MSM_CPU_8064, "APQ8064" },
+	[122] = { MSM_CPU_8960, "MSM8960" },
 
 	/* 8260A ID */
-	[123] = {MSM_CPU_8960, "MSM8960"},
+	[123] = { MSM_CPU_8960, "MSM8960" },
 
 	/* 8060A ID */
-	[124] = {MSM_CPU_8960, "MSM8960"},
+	[124] = { MSM_CPU_8960, "MSM8960" },
 
 	/* 8064 MPQ ID */
-	[130] = {MSM_CPU_8064, "APQ8064"},
+	[130] = { MSM_CPU_8064, "APQ8064" },
 
 	/* 8974 IDs */
-	[126] = {MSM_CPU_8974, "MSM8974"},
-	[184] = {MSM_CPU_8974, "MSM8974"},
-	[185] = {MSM_CPU_8974, "MSM8974"},
-	[186] = {MSM_CPU_8974, "MSM8974"},
+	[126] = { MSM_CPU_8974, "MSM8974" },
+	[184] = { MSM_CPU_8974, "MSM8974" },
+	[185] = { MSM_CPU_8974, "MSM8974" },
+	[186] = { MSM_CPU_8974, "MSM8974" },
 
 	/* 8974AA IDs */
-	[208] = {MSM_CPU_8974PRO_AA, "MSM8974PRO-AA"},
-	[211] = {MSM_CPU_8974PRO_AA, "MSM8974PRO-AA"},
-	[214] = {MSM_CPU_8974PRO_AA, "MSM8974PRO-AA"},
-	[217] = {MSM_CPU_8974PRO_AA, "MSM8974PRO-AA"},
+	[208] = { MSM_CPU_8974PRO_AA, "MSM8974PRO-AA" },
+	[211] = { MSM_CPU_8974PRO_AA, "MSM8974PRO-AA" },
+	[214] = { MSM_CPU_8974PRO_AA, "MSM8974PRO-AA" },
+	[217] = { MSM_CPU_8974PRO_AA, "MSM8974PRO-AA" },
 
 	/* 8974AB IDs */
-	[209] = {MSM_CPU_8974PRO_AB, "MSM8974PRO-AB"},
-	[212] = {MSM_CPU_8974PRO_AB, "MSM8974PRO-AB"},
-	[215] = {MSM_CPU_8974PRO_AB, "MSM8974PRO-AB"},
-	[218] = {MSM_CPU_8974PRO_AB, "MSM8974PRO-AB"},
+	[209] = { MSM_CPU_8974PRO_AB, "MSM8974PRO-AB" },
+	[212] = { MSM_CPU_8974PRO_AB, "MSM8974PRO-AB" },
+	[215] = { MSM_CPU_8974PRO_AB, "MSM8974PRO-AB" },
+	[218] = { MSM_CPU_8974PRO_AB, "MSM8974PRO-AB" },
 
 	/* 8974AC IDs */
-	[194] = {MSM_CPU_8974PRO_AC, "MSM8974PRO-AC"},
-	[210] = {MSM_CPU_8974PRO_AC, "MSM8974PRO-AC"},
-	[213] = {MSM_CPU_8974PRO_AC, "MSM8974PRO-AC"},
-	[216] = {MSM_CPU_8974PRO_AC, "MSM8974PRO-AC"},
+	[194] = { MSM_CPU_8974PRO_AC, "MSM8974PRO-AC" },
+	[210] = { MSM_CPU_8974PRO_AC, "MSM8974PRO-AC" },
+	[213] = { MSM_CPU_8974PRO_AC, "MSM8974PRO-AC" },
+	[216] = { MSM_CPU_8974PRO_AC, "MSM8974PRO-AC" },
 
 	/* 8960AB IDs */
-	[138] = {MSM_CPU_8960AB, "MSM8960AB"},
-	[139] = {MSM_CPU_8960AB, "MSM8960AB"},
-	[140] = {MSM_CPU_8960AB, "MSM8960AB"},
-	[141] = {MSM_CPU_8960AB, "MSM8960AB"},
+	[138] = { MSM_CPU_8960AB, "MSM8960AB" },
+	[139] = { MSM_CPU_8960AB, "MSM8960AB" },
+	[140] = { MSM_CPU_8960AB, "MSM8960AB" },
+	[141] = { MSM_CPU_8960AB, "MSM8960AB" },
 
 	/* 8084 IDs */
-	[178] = {MSM_CPU_8084, "APQ8084"},
+	[178] = { MSM_CPU_8084, "APQ8084" },
 
 	/* 8916 IDs */
-	[206] = {MSM_CPU_8916, "MSM8916"},
-	[247] = {MSM_CPU_8916, "APQ8016"},
-	[248] = {MSM_CPU_8916, "MSM8216"},
-	[249] = {MSM_CPU_8916, "MSM8116"},
-	[250] = {MSM_CPU_8916, "MSM8616"},
+	[206] = { MSM_CPU_8916, "MSM8916" },
+	[247] = { MSM_CPU_8916, "APQ8016" },
+	[248] = { MSM_CPU_8916, "MSM8216" },
+	[249] = { MSM_CPU_8916, "MSM8116" },
+	[250] = { MSM_CPU_8916, "MSM8616" },
 
 	/* 8996 IDs */
-	[246] = {MSM_CPU_8996, "MSM8996"},
-	[310] = {MSM_CPU_8996, "MSM8996"},
-	[311] = {MSM_CPU_8996, "APQ8096"},
-	[291] = {MSM_CPU_8996, "APQ8096"},
-	[305] = {MSM_CPU_8996, "MSM8996pro"},
-	[312] = {MSM_CPU_8996, "APQ8096pro"},
+	[246] = { MSM_CPU_8996, "MSM8996" },
+	[310] = { MSM_CPU_8996, "MSM8996" },
+	[311] = { MSM_CPU_8996, "APQ8096" },
+	[291] = { MSM_CPU_8996, "APQ8096" },
+	[305] = { MSM_CPU_8996, "MSM8996pro" },
+	[312] = { MSM_CPU_8996, "APQ8096pro" },
 
 	/* SDM660 ID */
-	[317] = {MSM_CPU_SDM660, "SDM660"},
+	[317] = { MSM_CPU_SDM660, "SDM660" },
 
 	/* sm8150 ID */
-	[339] = {MSM_CPU_SM8150, "SM8150"},
+	[339] = { MSM_CPU_SM8150, "SM8150" },
 
 	/* sa8150 ID */
-	[362] = {MSM_CPU_SA8150, "SA8150"},
+	[362] = { MSM_CPU_SA8150, "SA8150" },
 
 	/* sdmshrike ID */
-	[340] = {MSM_CPU_SDMSHRIKE, "SDMSHRIKE"},
+	[340] = { MSM_CPU_SDMSHRIKE, "SDMSHRIKE" },
 
 	/* sm6150 ID */
-	[355] = {MSM_CPU_SM6150, "SM6150"},
+	[355] = { MSM_CPU_SM6150, "SM6150" },
 
 	/* qcs405 ID */
-	[352] = {MSM_CPU_QCS405, "QCS405"},
+	[352] = { MSM_CPU_QCS405, "QCS405" },
 
 	/* sdxprairie ID */
-	[357] = {SDX_CPU_SDXPRAIRIE, "SDXPRAIRIE"},
+	[357] = { SDX_CPU_SDXPRAIRIE, "SDXPRAIRIE" },
 
 	/* sdmmagpie ID */
-	[365] = {MSM_CPU_SDMMAGPIE, "SDMMAGPIE"},
+	[365] = { MSM_CPU_SDMMAGPIE, "SDMMAGPIE" },
 
 	/* kona ID */
-	[356] = {MSM_CPU_KONA, "KONA"},
-	[455] = {MSM_CPU_KONA, "KONA"},
-	[496] = {MSM_CPU_KONA, "KONA"},
+	[356] = { MSM_CPU_KONA, "KONA" },
+	[455] = { MSM_CPU_KONA, "KONA" },
+	[496] = { MSM_CPU_KONA, "KONA" },
 
-	/* Lito ID */
-	[400] = {MSM_CPU_LITO, "LITO"},
-	[440] = {MSM_CPU_LITO, "LITO"},
+/* Lito ID */
+#ifdef OPLUS_ARCH_EXTENDS
+	[400] = { MSM_CPU_LITO, "SDM765G 5G" },
+#else
+	[400] = { MSM_CPU_LITO, "LITO" },
+#endif
 
 	/* Orchid ID */
-	[476] = {MSM_CPU_ORCHID, "ORCHID"},
+	[476] = { MSM_CPU_ORCHID, "ORCHID" },
 
 	/* Bengal ID */
-	[417] = {MSM_CPU_BENGAL, "BENGAL"},
-	[444] = {MSM_CPU_BENGAL, "BENGAL"},
+	[417] = { MSM_CPU_BENGAL, "BENGAL" },
+	[444] = { MSM_CPU_BENGAL, "BENGAL" },
 
 	/* Khaje ID */
-	[518] = {MSM_CPU_KHAJE, "KHAJE"},
+	[518] = { MSM_CPU_KHAJE, "KHAJE" },
 
 	/* Lagoon ID */
-	[434] = {MSM_CPU_LAGOON, "LAGOON"},
-	[459] = {MSM_CPU_LAGOON, "LAGOON"},
+	[434] = { MSM_CPU_LAGOON, "LAGOON" },
+	[459] = { MSM_CPU_LAGOON, "LAGOON" },
 
 	/* Bengalp ID */
-	[445] = {MSM_CPU_BENGALP, "BENGALP"},
-	[420] = {MSM_CPU_BENGALP, "BENGALP"},
+	[445] = { MSM_CPU_BENGALP, "BENGALP" },
+	[420] = { MSM_CPU_BENGALP, "BENGALP" },
 
 	/* Scuba ID */
-	[441] = {MSM_CPU_SCUBA, "SCUBA"},
-	[471] = {MSM_CPU_SCUBA, "SCUBA"},
+	[441] = { MSM_CPU_SCUBA, "SCUBA" },
+	[471] = { MSM_CPU_SCUBA, "SCUBA" },
 
 	/* Scuba IIOT  ID */
-	[473] = {MSM_CPU_SCUBAIOT, "SCUBAIIOT"},
-	[474] = {MSM_CPU_SCUBAPIOT, "SCUBAPIIOT"},
+	[473] = { MSM_CPU_SCUBAIOT, "SCUBAIIOT" },
+	[474] = { MSM_CPU_SCUBAPIOT, "SCUBAPIIOT" },
 
 	/* BENGAL-IOT ID */
-	[469] = {MSM_CPU_BENGAL_IOT, "BENGAL-IOT"},
+	[469] = { MSM_CPU_BENGAL_IOT, "BENGAL-IOT" },
 
 	/* BENGALP-IOT ID */
-	[470] = {MSM_CPU_BENGALP_IOT, "BENGALP-IOT"},
+	[470] = { MSM_CPU_BENGALP_IOT, "BENGALP-IOT" },
 
 	/* MSM8937 ID */
-	[294] = {MSM_CPU_8937, "MSM8937"},
-	[295] = {MSM_CPU_8937, "APQ8937"},
+	[294] = { MSM_CPU_8937, "MSM8937" },
+	[295] = { MSM_CPU_8937, "APQ8937" },
 
 	/* MSM8917 IDs */
-	[303] = {MSM_CPU_8917, "MSM8917"},
-	[307] = {MSM_CPU_8917, "APQ8017"},
-	[308] = {MSM_CPU_8917, "MSM8217"},
-	[309] = {MSM_CPU_8917, "MSM8617"},
+	[303] = { MSM_CPU_8917, "MSM8917" },
+	[307] = { MSM_CPU_8917, "APQ8017" },
+	[308] = { MSM_CPU_8917, "MSM8217" },
+	[309] = { MSM_CPU_8917, "MSM8617" },
 
 	/* SDM429 and SDM439 ID */
-	[353] = {MSM_CPU_SDM439, "SDM439"},
-	[354] = {MSM_CPU_SDM429, "SDM429"},
-
+	[353] = { MSM_CPU_SDM439, "SDM439" },
+	[354] = { MSM_CPU_SDM429, "SDM429" },
 
 	/* QM215 ID */
-	[386] = {MSM_CPU_QM215, "QM215"},
+	[386] = { MSM_CPU_QM215, "QM215" },
 
 	/* 8953 ID */
-	[293] = {MSM_CPU_8953, "MSM8953"},
-	[304] = {MSM_CPU_8953, "APQ8053"},
+	[293] = { MSM_CPU_8953, "MSM8953" },
+	[304] = { MSM_CPU_8953, "APQ8053" },
 
 	/* SDM450 ID */
-	[338] = {MSM_CPU_SDM450, "SDM450"},
+	[338] = { MSM_CPU_SDM450, "SDM450" },
 
 	/* Uninitialized IDs are not known to run Linux.
 	 * MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
 	 * considered as unknown CPU.
 	 */
 };
+#ifdef OPLUS_ARCH_EXTENDS
+static struct msm_soc_info cpu_of_id_19125 = { .generic_soc_type = MSM_CPU_LITO,
+					       .soc_id_string = "SDM765 5G" };
 
+static struct msm_soc_info cpu_of_id_21615 = { .generic_soc_type = MSM_CPU_KONA,
+					       .soc_id_string = "SM8250_AC" };
+static struct msm_soc_info cpu_of_id_20828 = { .generic_soc_type = MSM_CPU_KONA,
+					       .soc_id_string = "SM8250_AC" };
+
+static struct msm_soc_info cpu_of_id_op8 = { .generic_soc_type = MSM_CPU_KONA,
+					     .soc_id_string = "SM8250" };
+
+static struct msm_soc_info cpu_of_id_20127 = { .generic_soc_type = MSM_CPU_LITO,
+					       .soc_id_string = "SDM768G 5G" };
+
+static struct msm_soc_info cpu_of_id_2065c = { .generic_soc_type = MSM_CPU_LITO,
+					       .soc_id_string = "SDM768G" };
+#endif
 static enum msm_cpu cur_cpu;
 static int current_image;
 static uint32_t socinfo_format;
@@ -408,6 +441,33 @@ EXPORT_SYMBOL(socinfo_get_id);
 
 char *socinfo_get_id_string(void)
 {
+#ifdef OPLUS_ARCH_EXTENDS
+	if ((get_project() == 19125) || (get_project() == 19126)) {
+		return cpu_of_id_19125.soc_id_string;
+	}
+	if (!is_confidential() && get_project() == 20127) {
+		return cpu_of_id_20127.soc_id_string;
+	}
+	if (!is_confidential() &&
+	    (get_project() == 132700 || get_project() == 132701)) {
+		return cpu_of_id_2065c.soc_id_string;
+	}
+	if ((get_project() == 21615) || (get_project() == 21619) ||
+	    (get_project() == 0x2161A) || (get_project() == 0x2169A) ||
+	    (get_project() == 0x2169B) || (get_project() == 21623) ||
+	    (get_project() == 21732) || (get_project() == 21733) ||
+	    (get_project() == 22671)) {
+		return cpu_of_id_21615.soc_id_string;
+	}
+	if ((get_project() == 19811) || (get_project() == 19821) ||
+	    (get_project() == 19805) || (get_project() == 19855) ||
+	    (get_project() == 20809)) {
+		return cpu_of_id_op8.soc_id_string;
+	}
+	if (get_project() == 20828) {
+		return cpu_of_id_20828.soc_id_string;
+	}
+#endif
 	return (socinfo) ? cpu_of_id[socinfo->v0_1.id].soc_id_string : NULL;
 }
 EXPORT_SYMBOL(socinfo_get_id_string);
@@ -434,9 +494,38 @@ static char *msm_read_hardware_id(void)
 		goto err_path;
 	if (!cpu_of_id[socinfo->v0_1.id].soc_id_string)
 		goto err_path;
-
-	ret = strlcat(msm_soc_str, cpu_of_id[socinfo->v0_1.id].soc_id_string,
-			sizeof(msm_soc_str));
+#ifdef OPLUS_ARCH_EXTENDS
+	if ((get_project() == 19125) || (get_project() == 19126)) {
+		ret = strlcat(msm_soc_str, cpu_of_id_19125.soc_id_string,
+			      sizeof(msm_soc_str));
+	} else if (!is_confidential() && get_project() == 20127) {
+		ret = strlcat(msm_soc_str, cpu_of_id_20127.soc_id_string,
+			      sizeof(msm_soc_str));
+	} else if (!is_confidential() &&
+		   (get_project() == 132700 || get_project() == 132701)) {
+		ret = strlcat(msm_soc_str, cpu_of_id_2065c.soc_id_string,
+			      sizeof(msm_soc_str));
+	} else if ((get_project() == 21615) || (get_project() == 21619) ||
+		   (get_project() == 0x2161A) || (get_project() == 0x2169A) ||
+		   (get_project() == 0x2169B) || (get_project() == 21623) ||
+		   (get_project() == 21732) || (get_project() == 21733) ||
+		   (get_project() == 22671)) {
+		ret = strlcat(msm_soc_str, cpu_of_id_21615.soc_id_string,
+			      sizeof(msm_soc_str));
+	} else if ((get_project() == 19811) || (get_project() == 19821) ||
+		   (get_project() == 19805) || (get_project() == 19855) ||
+		   (get_project() == 20809)) {
+		ret = strlcat(msm_soc_str, cpu_of_id_op8.soc_id_string,
+			      sizeof(msm_soc_str));
+	} else if (get_project() == 20828) {
+		ret = strlcat(msm_soc_str, cpu_of_id_20828.soc_id_string,
+			      sizeof(msm_soc_str));
+	} else {
+#endif
+		ret = strlcat(msm_soc_str,
+			      cpu_of_id[socinfo->v0_1.id].soc_id_string,
+			      sizeof(msm_soc_str));
+	}
 	if (ret > sizeof(msm_soc_str))
 		goto err_path;
 
@@ -1707,6 +1796,52 @@ int __init socinfo_init(void)
 		pr_warn("New IDs added! ID => CPU mapping needs an update.\n");
 
 	cur_cpu = cpu_of_id[socinfo->v0_1.id].generic_soc_type;
+#ifdef OPLUS_ARCH_EXTENDS
+	if (is_confidential()) {
+#if defined(CONFIG_ARCH_LITO)
+		if ((get_project() == 19191) || (get_project() == 19192) ||
+		    (get_project() == 19015) || (get_project() == 19016) ||
+		    (get_project() == 19591) || (get_project() == 19525) ||
+		    (get_project() == 19101) || (get_project() == 19102) ||
+		    (get_project() == 19501) || (get_project() == 19125) ||
+		    (get_project() == 19126) || (get_project() == 19127) ||
+		    (get_project() == 19128) || (get_project() == 19521) ||
+		    (get_project() == 19335) || (get_project() == 20801) ||
+		    (get_project() == 20804))
+			cpu_of_id[socinfo->v0_1.id].soc_id_string = real_cpu_id;
+		else if ((get_project() == 20057) ||
+			 (get_project() == 20058 || get_project() == 20813) ||
+			 get_project() == 20814)
+			cpu_of_id[socinfo->v0_1.id].soc_id_string =
+				real_cpu_id_20057_20058;
+		else if ((get_project() == 20669) || (get_project() == 20750) ||
+			 (get_project() == 20751))
+			cpu_of_id[socinfo->v0_1.id].soc_id_string =
+				real_cpu_id_20669_20750_20751;
+		else
+			cpu_of_id[socinfo->v0_1.id].soc_id_string = fake_cpu_id;
+#else
+		cpu_of_id[socinfo->v0_1.id].soc_id_string = fake_cpu_id;
+#endif
+	} else {
+		if ((get_project() == 20057) ||
+		    (get_project() == 20058 || get_project() == 20813) ||
+		    get_project() == 20814)
+			cpu_of_id[socinfo->v0_1.id].soc_id_string =
+				real_cpu_id_20057_20058;
+		else if ((get_project() == 20669) || (get_project() == 20750) ||
+			 (get_project() == 20751))
+			cpu_of_id[socinfo->v0_1.id].soc_id_string =
+				real_cpu_id_20669_20750_20751;
+		else if ((get_project() == 20061) || (get_project() == 20161) ||
+			 (get_project() == 20163) || (get_project() == 20351) ||
+			 (get_project() == 21027))
+			cpu_of_id[socinfo->v0_1.id].soc_id_string =
+				real_cpu_id_20161_models;
+		else
+			cpu_of_id[socinfo->v0_1.id].soc_id_string = real_cpu_id;
+	}
+#endif
 	boot_stats_init();
 	socinfo_print();
 	arch_read_hardware_id = msm_read_hardware_id;
