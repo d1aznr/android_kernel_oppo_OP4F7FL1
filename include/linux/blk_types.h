@@ -322,31 +322,35 @@ enum req_opf {
 };
 
 enum req_flag_bits {
-	__REQ_FAILFAST_DEV =	/* no driver retries of device errors */
-		REQ_OP_BITS,
+	__REQ_FAILFAST_DEV = /* no driver retries of device errors */
+	REQ_OP_BITS,
 	__REQ_FAILFAST_TRANSPORT, /* no driver retries of transport errors */
-	__REQ_FAILFAST_DRIVER,	/* no driver retries of driver errors */
-	__REQ_SYNC,		/* request is sync (sync write or read) */
-	__REQ_META,		/* metadata io request */
-	__REQ_PRIO,		/* boost priority in cfq */
-	__REQ_NOMERGE,		/* don't touch this for merging */
-	__REQ_IDLE,		/* anticipate more IO after this one */
-	__REQ_INTEGRITY,	/* I/O includes block integrity payload */
-	__REQ_FUA,		/* forced unit access */
-	__REQ_PREFLUSH,		/* request for cache flush */
-	__REQ_RAHEAD,		/* read ahead, can fail anytime */
-	__REQ_BACKGROUND,	/* background IO */
-	__REQ_NOWAIT,           /* Don't wait if request will block */
+	__REQ_FAILFAST_DRIVER, /* no driver retries of driver errors */
+	__REQ_SYNC, /* request is sync (sync write or read) */
+	__REQ_META, /* metadata io request */
+	__REQ_PRIO, /* boost priority in cfq */
+	__REQ_NOMERGE, /* don't touch this for merging */
+	__REQ_IDLE, /* anticipate more IO after this one */
+	__REQ_INTEGRITY, /* I/O includes block integrity payload */
+	__REQ_FUA, /* forced unit access */
+	__REQ_PREFLUSH, /* request for cache flush */
+#ifdef OPLUS_FEATURE_SCHED_ASSIST
+	__REQ_UX, /* ux activity */
+	__REQ_FG, /* foreground activity */
+#endif
+	__REQ_RAHEAD, /* read ahead, can fail anytime */
+	__REQ_BACKGROUND, /* background IO */
+	__REQ_NOWAIT, /* Don't wait if request will block */
 
 	__REQ_SORTED = __REQ_RAHEAD, /* elevator knows about this request */
-	__REQ_URGENT,		/* urgent request */
+	__REQ_URGENT, /* urgent request */
 	/* command specific flags for REQ_OP_WRITE_ZEROES: */
-	__REQ_NOUNMAP,		/* do not free blocks when zeroing */
+	__REQ_NOUNMAP, /* do not free blocks when zeroing */
 
 	/* for driver use */
 	__REQ_DRV,
-	__REQ_SWAP,		/* swapping request. */
-	__REQ_NR_BITS,		/* stops here */
+	__REQ_SWAP, /* swapping request. */
+	__REQ_NR_BITS, /* stops here */
 };
 
 #define REQ_FAILFAST_DEV	(1ULL << __REQ_FAILFAST_DEV)
@@ -361,6 +365,10 @@ enum req_flag_bits {
 #define REQ_INTEGRITY		(1ULL << __REQ_INTEGRITY)
 #define REQ_FUA			(1ULL << __REQ_FUA)
 #define REQ_PREFLUSH		(1ULL << __REQ_PREFLUSH)
+#ifdef OPLUS_FEATURE_SCHED_ASSIST
+#define REQ_UX (1ULL << __REQ_UX)
+#define REQ_FG (1ULL << __REQ_FG)
+#endif
 #define REQ_RAHEAD		(1ULL << __REQ_RAHEAD)
 #define REQ_BACKGROUND		(1ULL << __REQ_BACKGROUND)
 #define REQ_NOWAIT		(1ULL << __REQ_NOWAIT)

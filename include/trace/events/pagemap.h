@@ -27,39 +27,29 @@
 
 TRACE_EVENT(mm_lru_insertion,
 
-	TP_PROTO(
-		struct page *page,
-		int lru
-	),
+	    TP_PROTO(struct page *page),
 
-	TP_ARGS(page, lru),
+	    TP_ARGS(page),
 
-	TP_STRUCT__entry(
-		__field(struct page *,	page	)
-		__field(unsigned long,	pfn	)
-		__field(int,		lru	)
-		__field(unsigned long,	flags	)
-	),
+	    TP_STRUCT__entry(__field(struct page *, page) __field(unsigned long,
+								  pfn)
+				     __field(enum lru_list, lru)
+					     __field(unsigned long, flags)),
 
-	TP_fast_assign(
-		__entry->page	= page;
-		__entry->pfn	= page_to_pfn(page);
-		__entry->lru	= lru;
-		__entry->flags	= trace_pagemap_flags(page);
-	),
+	    TP_fast_assign(__entry->page = page;
+			   __entry->pfn = page_to_pfn(page);
+			   __entry->lru = page_lru(page);
+			   __entry->flags = trace_pagemap_flags(page);),
 
-	/* Flag format is based on page-types.c formatting for pagemap */
-	TP_printk("page=%p pfn=%lu lru=%d flags=%s%s%s%s%s%s",
-			__entry->page,
-			__entry->pfn,
-			__entry->lru,
-			__entry->flags & PAGEMAP_MAPPED		? "M" : " ",
-			__entry->flags & PAGEMAP_ANONYMOUS	? "a" : "f",
-			__entry->flags & PAGEMAP_SWAPCACHE	? "s" : " ",
-			__entry->flags & PAGEMAP_SWAPBACKED	? "b" : " ",
-			__entry->flags & PAGEMAP_MAPPEDDISK	? "d" : " ",
-			__entry->flags & PAGEMAP_BUFFERS	? "B" : " ")
-);
+	    /* Flag format is based on page-types.c formatting for pagemap */
+	    TP_printk("page=%p pfn=%lu lru=%d flags=%s%s%s%s%s%s",
+		      __entry->page, __entry->pfn, __entry->lru,
+		      __entry->flags &PAGEMAP_MAPPED ? "M" : " ",
+		      __entry->flags &PAGEMAP_ANONYMOUS ? "a" : "f",
+		      __entry->flags &PAGEMAP_SWAPCACHE ? "s" : " ",
+		      __entry->flags &PAGEMAP_SWAPBACKED ? "b" : " ",
+		      __entry->flags &PAGEMAP_MAPPEDDISK ? "d" : " ",
+		      __entry->flags &PAGEMAP_BUFFERS ? "B" : " "));
 
 TRACE_EVENT(mm_lru_activate,
 
