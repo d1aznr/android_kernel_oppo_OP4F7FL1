@@ -37,7 +37,6 @@
 #ifdef OPLUS_FEATURE_SCHED_ASSIST
 extern unsigned int walt_scale_demand_divisor;
 bool ux_task_misfit(struct task_struct *p, int cpu);
-#define scale_demand(d) ((d) / walt_scale_demand_divisor)
 #endif /* OPLUS_FEATURE_SCHED_ASSIST */
 
 #ifdef CONFIG_OPLUS_FEATURE_GAME_OPT
