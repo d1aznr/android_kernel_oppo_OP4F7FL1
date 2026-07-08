@@ -2,7 +2,7 @@
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM vh_vmscan
 #undef TRACE_INCLUDE_PATH
-#define TRACE_INCLUDE_PATH trace / hooks
+#define TRACE_INCLUDE_PATH trace/hooks
 #if !defined(_TRACE_HOOK_VMSCAN_H) || defined(TRACE_HEADER_MULTI_READ)
 #define _TRACE_HOOK_VMSCAN_H
 #include <linux/tracepoint.h>
