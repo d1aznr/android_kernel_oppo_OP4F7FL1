@@ -4,7 +4,7 @@
  */
 
 #undef TRACE_SYSTEM
-#define TRACE_INCLUDE_PATH ../../ block / uxio_first / trace
+#define TRACE_INCLUDE_PATH ../../block/uxio_first/trace
 #define TRACE_SYSTEM uxio_first_opt_trace
 
 #if !defined(_OPLUS_UXIO_FIRST_OPT_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
