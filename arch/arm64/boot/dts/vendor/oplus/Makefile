@@ -42,7 +42,6 @@ else
 endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
-$(info wudang use overlay dtb)
 dtbo-$(CONFIG_ARCH_LAGOON) += \
 		lagoon-mtp-wudang-overlay.dtbo \
 		lagoon-20669-mtp-zeus-overlay.dtbo
@@ -50,7 +49,6 @@ dtbo-$(CONFIG_ARCH_LAGOON) += \
 lagoon-mtp-wudang-overlay.dtbo-base := lagoon-wudang.dtb
 lagoon-20669-mtp-zeus-overlay.dtbo-base := lagoon-20669-zeus.dtb
 else
-$(info wudang not use overlay dtb)
 dtb-$(CONFIG_ARCH_LAGOON) += \
 		lagoon-mtp.dtb
 endif
