@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Oplus project DTS selection
+
+menu "Oplus Vendor DTS Project Selection"
+
+config VENDOR_DTS_PROJECTS
+	string "Vendor DTS project folder(s)"
+	default "qcom"
+	help
+	  Space-separated list of project folder names under vendor/ to build DTS for.
+
+	  Example values:
+	    "qcom"             - single project
+	    "20351 qcom oplus" - multiple projects
+
+endmenu
